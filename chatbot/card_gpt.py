@@ -58,6 +58,7 @@ def append_log_to_sheet(log_entry):
             ", ".join(log_entry.get("clicked_cards", [])),
             log_entry.get("session_duration_sec", 0),
             log_entry.get("ab_version", ""),
+            log_entry.get("report_flag", ""),  # ✅ 신고 여부 추가
         ]
         sheet.append_row(row, value_input_option="USER_ENTERED")
     except Exception as e:
@@ -85,9 +86,7 @@ def extract_card_ids(text):
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 즉시 링크 열기 + 신고 기능"""
-    clicked = []
-
+    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 신고 기능"""
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -109,72 +108,37 @@ def show_card_details(card_ids):
         col1, col2 = st.columns(2)
         with col1:
             if pc_link:
-                html_button = f"""
-                <a href="{pc_link}" target="_blank">
-                    <button style="
-                        background-color:#0072C6;
-                        color:white;
-                        border:none;
-                        padding:8px 16px;
-                        border-radius:6px;
-                        cursor:pointer;
-                    ">🖥️ PC 신청 ({cid})</button>
-                </a>
-                """
-                st.markdown(html_button, unsafe_allow_html=True)
-                clicked.append(f"{cid}_pc")
+                st.markdown(
+                    f'<a href="{pc_link}" target="_blank"><button style="background-color:#0072C6;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">🖥️ PC 신청 ({cid})</button></a>',
+                    unsafe_allow_html=True,
+                )
+                if f"{cid}_pc" not in st.session_state["clicked_cards"]:
+                    st.session_state["clicked_cards"].append(f"{cid}_pc")
             else:
                 st.write("PC 신청 링크 없음")
 
         with col2:
             if m_link:
-                html_button = f"""
-                <a href="{m_link}" target="_blank">
-                    <button style="
-                        background-color:#28a745;
-                        color:white;
-                        border:none;
-                        padding:8px 16px;
-                        border-radius:6px;
-                        cursor:pointer;
-                    ">📱 모바일 신청 ({cid})</button>
-                </a>
-                """
-                st.markdown(html_button, unsafe_allow_html=True)
-                clicked.append(f"{cid}_m")
+                st.markdown(
+                    f'<a href="{m_link}" target="_blank"><button style="background-color:#28a745;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">📱 모바일 신청 ({cid})</button></a>',
+                    unsafe_allow_html=True,
+                )
+                if f"{cid}_m" not in st.session_state["clicked_cards"]:
+                    st.session_state["clicked_cards"].append(f"{cid}_m")
             else:
                 st.write("모바일 신청 링크 없음")
 
         # 불일치 신고 버튼
         if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
             try:
-                # 클릭 카드 기록에 "report" 추가
-                st.session_state["clicked_cards"].append(f"{cid}_report")
-
-                # 기존 로그와 동일하게 한 줄로 기록
-                log_entry = {
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "user_info": {
-                        "name": st.session_state.get("user_name", "익명"),
-                        "age_group": "",
-                        "occupation": "",
-                    },
-                    "query": f"불일치 신고 (카드ID: {cid})",
-                    "response": "",
-                    "card_ids": [str(cid)],
-                    "clicked_cards": st.session_state["clicked_cards"],
-                    "session_duration_sec": 0,
-                    "ab_version": AB_VERSION,
-                }
-
-                append_log_to_sheet(log_entry)
-                st.success(f"카드ID {cid} 신고가 접수되었습니다.")
+                if f"{cid}_report" not in st.session_state["clicked_cards"]:
+                    st.session_state["clicked_cards"].append(f"{cid}_report")
+                    st.session_state["report_flag"] = f"카드ID {cid} 신고"
+                    st.success(f"카드ID {cid} 신고가 접수되었습니다.")
             except Exception as e:
-                st.error(f"신고 저장 실패: {e}")
+                st.error(f"신고 처리 실패: {e}")
 
         st.write("---")
-
-    return clicked
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -193,6 +157,9 @@ if "clicked_cards" not in st.session_state:
 
 if "recommended_cards" not in st.session_state:
     st.session_state["recommended_cards"] = []
+
+if "report_flag" not in st.session_state:
+    st.session_state["report_flag"] = ""
 
 
 # ------------------------------- 모델 설정 -------------------------------
@@ -256,7 +223,7 @@ def conversation_with_memory(question, user_info):
     card_ids = extract_card_ids(full_response)
 
     with image_placeholder.container():
-        clicked = show_card_details(card_ids)
+        show_card_details(card_ids)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -270,9 +237,10 @@ def conversation_with_memory(question, user_info):
         "query": question,
         "response": full_response,
         "card_ids": card_ids,
-        "clicked_cards": clicked,
+        "clicked_cards": st.session_state["clicked_cards"],
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
+        "report_flag": st.session_state.get("report_flag", ""),
     }
 
     # 세션에 카드 저장 (리렌더링 유지)
