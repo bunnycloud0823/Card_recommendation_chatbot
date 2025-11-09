@@ -135,15 +135,33 @@ def show_card_details(card_ids):
             else:
                 st.write("모바일 신청 링크 없음")
 
-        # 불일치 신고 버튼
+        # ------------------- 신고 버튼 처리 -------------------
         if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
             try:
                 if f"{cid}_report" not in st.session_state["clicked_cards"]:
                     st.session_state["clicked_cards"].append(f"{cid}_report")
-                    st.session_state["report_flag"] = f"카드ID {cid} 신고"
-                    st.success(f"카드ID {cid} 신고가 접수되었습니다.")
+
+                # ✅ 즉시 로그 기록
+                log_entry = {
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "user_info": {
+                        "name": st.session_state.get("user_name", "익명"),
+                        "age_group": "",
+                        "occupation": "",
+                    },
+                    "query": f"불일치 신고 (카드ID: {cid})",
+                    "response": "",
+                    "card_ids": [str(cid)],
+                    "clicked_cards": st.session_state["clicked_cards"],
+                    "session_duration_sec": 0,
+                    "ab_version": AB_VERSION,
+                    "report_flag": f"카드ID {cid} 신고",
+                }
+
+                append_log_to_sheet(log_entry)
+                st.success(f"카드ID {cid} 신고가 접수되었습니다.")
             except Exception as e:
-                st.error(f"신고 처리 실패: {e}")
+                st.error(f"신고 저장 실패: {e}")
 
         st.write("---")
 
