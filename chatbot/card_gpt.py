@@ -27,9 +27,20 @@ load_dotenv()
 
 # Streamlit Secrets에서 환경 변수 불러오기
 SHEET_ID = st.secrets["SHEET_ID"]
-service_account_info = st.secrets["GOOGLE_SERVICE_ACCOUNT"]
 
-# Google Sheets 인증
+# Google Service Account JSON 파싱
+raw_json = st.secrets["GOOGLE_SERVICE_ACCOUNT"]
+try:
+    parsed = json.loads(raw_json)
+    if isinstance(parsed, str):
+        service_account_info = json.loads(parsed)
+    else:
+        service_account_info = parsed
+except json.JSONDecodeError as e:
+    st.error(f"❌ JSON 파싱 오류: {e}")
+    st.stop()
+
+# Google 인증 객체 생성
 creds = Credentials.from_service_account_info(
     service_account_info,
     scopes=[
@@ -37,6 +48,7 @@ creds = Credentials.from_service_account_info(
         "https://www.googleapis.com/auth/drive",
     ],
 )
+
 gc = gspread.authorize(creds)
 sheet = gc.open_by_key(SHEET_ID).sheet1
 
