@@ -65,6 +65,7 @@ def append_log_to_sheet(log_entry):
         ]
 
         sheet.append_row(row, value_input_option="USER_ENTERED")
+        st.info("로그가 Google Sheets에 정상적으로 기록되었습니다.")
 
     except Exception as e:
         st.error(f"Google Sheets 로그 저장 실패: {e}")
@@ -91,7 +92,7 @@ def extract_card_ids(text):
     return re.findall(r"카드ID\s*:\s*(\d+)", text)
 
 
-def show_card_details(card_ids):
+def show_card_details(card_ids, user_info, question):
     """카드ID 기반으로 이미지·링크 표시 및 신고 처리"""
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
@@ -147,7 +148,10 @@ def show_card_details(card_ids):
                 reported_cards.append(f"{cid}_report")
                 st.session_state["reported_cards"] = reported_cards
                 st.session_state["report_flag"] = True
-                st.success(f"카드ID {cid} 신고가 접수되었습니다. 로그에 반영됩니다.")
+                st.session_state["report_target"] = cid
+                st.session_state["report_user"] = user_info
+                st.session_state["report_query"] = question
+                st.experimental_rerun()
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -168,10 +172,13 @@ if "recommended_cards" not in st.session_state:
     st.session_state["recommended_cards"] = []
 
 if "report_flag" not in st.session_state:
-    st.session_state["report_flag"] = ""
+    st.session_state["report_flag"] = False
 
 if "reported_cards" not in st.session_state:
     st.session_state["reported_cards"] = []
+
+if "report_target" not in st.session_state:
+    st.session_state["report_target"] = None
 
 
 # ------------------------------- 모델 설정 -------------------------------
@@ -182,12 +189,6 @@ system_prompt = """
 신용카드, 체크카드에 대한 명시가 없을 경우 신용카드, 체크카드 각각 1개씩 추천하고 명시할 경우 해당 카드로 2개 추천해줘.
 context 내용에 한해서만 추천해주되, context에 없는 내용은 발설하지 말아줘.
 각 카드의 마지막 줄에는 반드시 '카드ID: {{card_id}}'를 포함시켜줘.
-
-출력 예시:
-카드명
-- 추천 이유
-- 주요 혜택
-카드ID:
 """
 
 user_prompt = """\
@@ -230,7 +231,7 @@ def conversation_with_memory(question, user_info):
     card_ids = extract_card_ids(full_response)
 
     with image_placeholder.container():
-        show_card_details(card_ids)
+        show_card_details(card_ids, user_info, question)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -275,16 +276,36 @@ user_info = {
     "occupation": occupation,
 }
 
+# 이전 대화 및 추천 카드 유지
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
+# 이전 추천 카드 표시
 if st.session_state["recommended_cards"]:
     st.subheader("이전 추천 카드 목록")
     for rec in st.session_state["recommended_cards"]:
         st.write(rec["response"])
-        show_card_details(rec["card_ids"])
+        show_card_details(rec["card_ids"], user_info, rec["response"])
 
+# 신고 감지 시 로그 처리
+if st.session_state.get("report_flag") and st.session_state.get("report_target"):
+    log_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "user_info": st.session_state.get("report_user", user_info),
+        "query": f"불일치 신고 (카드ID: {st.session_state['report_target']})",
+        "response": "",
+        "card_ids": [str(st.session_state["report_target"])],
+        "clicked_cards": st.session_state["clicked_cards"],
+        "session_duration_sec": 0,
+        "ab_version": AB_VERSION,
+        "report_flag": True,
+    }
+    append_log_to_sheet(log_entry)
+    st.session_state["report_flag"] = False
+    st.session_state["report_target"] = None
+
+# 입력창
 question = st.chat_input("카드 추천만 가능합니다.")
 if question:
     st.session_state["messages"].append({"role": "user", "content": question})
