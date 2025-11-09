@@ -19,19 +19,11 @@ AB_VERSION = random.choice(["A", "B"])
 SESSION_START = datetime.datetime.now()
 
 # ------------------------------- 카드 링크·이미지 로드 -------------------------------
-import os, json, re
-import streamlit as st
-
-# 현재 실행 파일 기준 상대 경로
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-
-# 데이터 파일 경로
 LINK_IMAGE_PATH = os.path.join(BASE_DIR, "cards_link_image.json")
-IMAGE_DIR = os.path.join(BASE_DIR, "../images")
-
-# JSON 파일 로드
 with open(LINK_IMAGE_PATH, "r", encoding="utf-8") as f:
     link_data = json.load(f)
+
 LINK_DB = {str(item["card_id"]): item for item in link_data}
 
 
