@@ -46,7 +46,7 @@ gc = gspread.authorize(creds)
 sheet = gc.open_by_key(SHEET_ID).sheet1
 
 
-# 로그 저장 함수
+# ------------------------------- 로그 저장 함수 -------------------------------
 def append_log_to_sheet(log_entry):
     """Google Sheets에 로그 추가"""
     try:
@@ -66,26 +66,28 @@ def append_log_to_sheet(log_entry):
         print(f"[로그 저장 실패] Google Sheets → {e}")
 
 
-# A/B 테스트 버전 및 세션 시작 시간
+# ------------------------------- 세션 및 A/B 설정 -------------------------------
 AB_VERSION = random.choice(["A", "B"])
 SESSION_START = datetime.datetime.now()
 
 # ------------------------------- 카드 링크·이미지 로드 -------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LINK_IMAGE_PATH = os.path.join(BASE_DIR, "cards_link_image.json")
+
 with open(LINK_IMAGE_PATH, "r", encoding="utf-8") as f:
     link_data = json.load(f)
 
 LINK_DB = {str(item["card_id"]): item for item in link_data}
 
 
+# ------------------------------- 함수 정의 -------------------------------
 def extract_card_ids(text):
     """AI 응답에서 카드ID 추출"""
     return re.findall(r"카드ID\s*:\s*(\d+)", text)
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시"""
+    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적"""
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -101,23 +103,24 @@ def show_card_details(card_ids):
             else:
                 st.warning(f"이미지 파일을 찾을 수 없습니다: {abs_img_path}")
 
-        # 신청 링크 표시
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
 
-        if pc_link:
-            st.markdown(f"[PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
-        else:
-            st.write("PC 신청 링크 없음")
-
-        if m_link:
-            st.markdown(f"[모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True)
-        else:
-            st.write("모바일 신청 링크 없음")
+        col1, col2 = st.columns(2)
+        with col1:
+            if pc_link and st.button(f"PC 신청 ({cid})", key=f"pc_{cid}"):
+                if f"{cid}_pc" not in st.session_state["clicked_cards"]:
+                    st.session_state["clicked_cards"].append(f"{cid}_pc")
+                st.markdown(f"[PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
+        with col2:
+            if m_link and st.button(f"모바일 신청 ({cid})", key=f"m_{cid}"):
+                if f"{cid}_m" not in st.session_state["clicked_cards"]:
+                    st.session_state["clicked_cards"].append(f"{cid}_m")
+                st.markdown(
+                    f"[모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True
+                )
 
         st.write("---")
-
-    return []
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -133,6 +136,9 @@ if "messages" not in st.session_state:
             "content": "안녕하세요. 저는 AI 카드 추천 전문가입니다. 당신에게 맞는 카드를 추천해드릴게요.",
         }
     ]
+
+if "clicked_cards" not in st.session_state:
+    st.session_state["clicked_cards"] = []
 
 # ------------------------------- 모델 설정 -------------------------------
 model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -183,7 +189,7 @@ def conversation_with_memory(question, user_info):
 
     card_ids = extract_card_ids(full_response)
     with image_placeholder.container():
-        clicked = show_card_details(card_ids)
+        show_card_details(card_ids)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -197,7 +203,7 @@ def conversation_with_memory(question, user_info):
         "query": question,
         "response": full_response,
         "card_ids": card_ids,
-        "clicked_cards": clicked,  # 실제 클릭된 카드ID 저장
+        "clicked_cards": st.session_state.get("clicked_cards", []),
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
     }
