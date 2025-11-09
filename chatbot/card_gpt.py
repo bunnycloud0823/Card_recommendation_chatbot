@@ -17,24 +17,24 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 
-try:
-    import json, os, gspread
-    from google.oauth2.service_account import Credentials
+# try:
+#     import json, os, gspread
+#     from google.oauth2.service_account import Credentials
 
-    service_info = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"])
-    creds = Credentials.from_service_account_info(
-        service_info,
-        scopes=[
-            "https://www.googleapis.com/auth/spreadsheets",
-            "https://www.googleapis.com/auth/drive",
-        ],
-    )
-    gc = gspread.authorize(creds)
-    sheet = gc.open_by_key(os.environ["SHEET_ID"]).sheet1
-    sheet.append_row(["테스트", "로그", "성공"], value_input_option="USER_ENTERED")
-    print("✅ Google Sheets 연결 성공 및 데이터 추가 완료")
-except Exception as e:
-    print(f"❌ Google Sheets 연결 실패 → {e}")
+#     service_info = json.loads(os.environ["GOOGLE_SERVICE_ACCOUNT"])
+#     creds = Credentials.from_service_account_info(
+#         service_info,
+#         scopes=[
+#             "https://www.googleapis.com/auth/spreadsheets",
+#             "https://www.googleapis.com/auth/drive",
+#         ],
+#     )
+#     gc = gspread.authorize(creds)
+#     sheet = gc.open_by_key(os.environ["SHEET_ID"]).sheet1
+#     sheet.append_row(["테스트", "로그", "성공"], value_input_option="USER_ENTERED")
+#     print("✅ Google Sheets 연결 성공 및 데이터 추가 완료")
+# except Exception as e:
+#     print(f"❌ Google Sheets 연결 실패 → {e}")
 
 
 # ------------------------------- 초기 설정 -------------------------------
@@ -82,7 +82,7 @@ SESSION_START = datetime.datetime.now()
 
 # ------------------------------- 카드 링크·이미지 로드 -------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
-LINK_IMAGE_PATH = os.path.join(BASE_DIR, "cards_link_image.json")
+LINK_IMAGE_PATH = os.path.join(os.path.dirname(BASE_DIR), "cards_link_image.json")
 with open(LINK_IMAGE_PATH, "r", encoding="utf-8") as f:
     link_data = json.load(f)
 
