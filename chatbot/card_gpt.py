@@ -85,7 +85,7 @@ def extract_card_ids(text):
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 오류 신고 기능"""
+    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 즉시 링크 열기 + 신고 기능"""
     clicked = []
 
     for cid in card_ids:
@@ -106,20 +106,46 @@ def show_card_details(card_ids):
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
 
-        # 클릭 버튼 생성
         col1, col2 = st.columns(2)
         with col1:
-            if pc_link and st.button(f"🖥️ PC 신청 ({cid})", key=f"pc_{cid}"):
+            if pc_link:
+                html_button = f"""
+                <a href="{pc_link}" target="_blank">
+                    <button style="
+                        background-color:#0072C6;
+                        color:white;
+                        border:none;
+                        padding:8px 16px;
+                        border-radius:6px;
+                        cursor:pointer;
+                    ">🖥️ PC 신청 ({cid})</button>
+                </a>
+                """
+                st.markdown(html_button, unsafe_allow_html=True)
                 clicked.append(f"{cid}_pc")
-                st.markdown(f"[PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
-        with col2:
-            if m_link and st.button(f"📱 모바일 신청 ({cid})", key=f"m_{cid}"):
-                clicked.append(f"{cid}_m")
-                st.markdown(
-                    f"[모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True
-                )
+            else:
+                st.write("PC 신청 링크 없음")
 
-        # 오류 신고 버튼
+        with col2:
+            if m_link:
+                html_button = f"""
+                <a href="{m_link}" target="_blank">
+                    <button style="
+                        background-color:#28a745;
+                        color:white;
+                        border:none;
+                        padding:8px 16px;
+                        border-radius:6px;
+                        cursor:pointer;
+                    ">📱 모바일 신청 ({cid})</button>
+                </a>
+                """
+                st.markdown(html_button, unsafe_allow_html=True)
+                clicked.append(f"{cid}_m")
+            else:
+                st.write("모바일 신청 링크 없음")
+
+        # 불일치 신고 버튼
         if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
             try:
                 sheet.append_row(
