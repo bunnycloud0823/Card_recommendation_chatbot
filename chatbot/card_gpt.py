@@ -12,9 +12,50 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables import RunnableLambda
 
+# Google Sheets 관련 라이브러리
+import gspread
+from google.oauth2.service_account import Credentials
+
+# ------------------------------- 초기 설정 -------------------------------
 load_dotenv()
 
-LOG_PATH = "./user_logs.jsonl"
+# Google Sheets API 설정
+CREDENTIALS_PATH = "./service_account.json"  # 서비스 계정 JSON 키 파일
+SHEET_ID = "1smRHASYfErNH8IQZYyn7m-lCegGlUjZt1Z_BIcRlKhE"  # 구글 시트 ID 입력
+
+# Google Sheets 인증
+creds = Credentials.from_service_account_file(
+    CREDENTIALS_PATH,
+    scopes=[
+        "https://www.googleapis.com/auth/spreadsheets",
+        "https://www.googleapis.com/auth/drive",
+    ],
+)
+gc = gspread.authorize(creds)
+sheet = gc.open_by_key(SHEET_ID).sheet1
+
+
+# 로그 저장 함수
+def append_log_to_sheet(log_entry):
+    """Google Sheets에 로그 추가"""
+    try:
+        row = [
+            log_entry.get("timestamp"),
+            log_entry.get("user_info", {}).get("name", ""),
+            log_entry.get("user_info", {}).get("age_group", ""),
+            log_entry.get("user_info", {}).get("occupation", ""),
+            log_entry.get("query", ""),
+            ", ".join(log_entry.get("card_ids", [])),
+            ", ".join(log_entry.get("clicked_cards", [])),
+            log_entry.get("session_duration_sec", 0),
+            log_entry.get("ab_version", ""),
+        ]
+        sheet.append_row(row, value_input_option="USER_ENTERED")
+    except Exception as e:
+        print(f"[로그 저장 실패] Google Sheets → {e}")
+
+
+# A/B 테스트 버전 및 세션 시작 시간
 AB_VERSION = random.choice(["A", "B"])
 SESSION_START = datetime.datetime.now()
 
@@ -49,7 +90,7 @@ def show_card_details(card_ids):
             else:
                 st.warning(f"이미지 파일을 찾을 수 없습니다: {abs_img_path}")
 
-        # 링크 출력 (버튼 대신 직접 링크 표시)
+        # 신청 링크 표시
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
 
@@ -129,10 +170,9 @@ def conversation_with_memory(question, user_info):
         full_response += chunk
         stream_placeholder.write(full_response)
 
-    # 카드ID 추출 및 이미지/링크 표시
     card_ids = extract_card_ids(full_response)
     with image_placeholder.container():
-        clicked = show_card_details(card_ids)
+        show_card_details(card_ids)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -146,20 +186,19 @@ def conversation_with_memory(question, user_info):
         "query": question,
         "response": full_response,
         "card_ids": card_ids,
-        "clicked_cards": clicked,
+        "clicked_cards": [],
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
     }
 
-    os.makedirs(os.path.dirname(LOG_PATH), exist_ok=True)
-    with open(LOG_PATH, "a", encoding="utf-8") as f:
-        f.write(json.dumps(log_entry, ensure_ascii=False) + "\n")
+    # Google Sheets에 로그 기록
+    append_log_to_sheet(log_entry)
 
     return full_response
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("당신만의 AI 카드 추천 챗봇 서비스🥰")
+st.title("당신만의 AI 카드 추천 챗봇 서비스")
 
 col1, col2 = st.columns(2)
 with col1:
