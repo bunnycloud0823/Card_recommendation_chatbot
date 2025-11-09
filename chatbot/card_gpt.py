@@ -89,7 +89,7 @@ def extract_card_ids(text):
 def show_card_details(card_ids):
     """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 오류 신고 기능"""
 
-    # 신고 상태 저장용 세션 추가
+    # 세션에 신고 상태 저장 리스트가 없으면 초기화
     if "reported_cards" not in st.session_state:
         st.session_state["reported_cards"] = []
 
@@ -111,10 +111,9 @@ def show_card_details(card_ids):
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
 
-        # 링크 표시
         if pc_link:
             st.markdown(
-                f"[🖥️ **PC 신청 링크 열기 ({cid})**]({pc_link})",
+                f"[PC 신청 링크 열기 ({cid})]({pc_link})",
                 unsafe_allow_html=True,
             )
             if f"{cid}_pc" not in st.session_state["clicked_cards"]:
@@ -122,7 +121,7 @@ def show_card_details(card_ids):
 
         if m_link:
             st.markdown(
-                f"[📱 **모바일 신청 링크 열기 ({cid})**]({m_link})",
+                f"[모바일 신청 링크 열기 ({cid})]({m_link})",
                 unsafe_allow_html=True,
             )
             if f"{cid}_m" not in st.session_state["clicked_cards"]:
@@ -131,36 +130,44 @@ def show_card_details(card_ids):
         if not pc_link and not m_link:
             st.write("신청 링크 없음")
 
-        if cid not in st.session_state["reported_cards"]:
-            if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
-                report_entry = {
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "report_type": "불일치 신고",
-                    "card_id": cid,
-                    "user_name": st.session_state.get("user_name", "익명"),
-                    "ab_version": AB_VERSION,
-                }
-                try:
-                    sheet.append_row(
-                        [
-                            report_entry["timestamp"],
-                            report_entry["user_name"],
-                            "",
-                            "",
-                            f"불일치 신고 (카드ID: {cid})",
-                            cid,
-                            "",
-                            "",
-                            report_entry["ab_version"],
-                            "신고됨",
-                        ],
-                        value_input_option="USER_ENTERED",
-                    )
-                    st.session_state["reported_cards"].append(cid)
-                    st.success(f"카드ID {cid} 신고가 접수되었습니다.")
-                except Exception as e:
-                    st.error(f"신고 저장 실패: {e}")
+        # 버튼 클릭 후 재렌더링 문제 해결
+        report_key = f"report_{cid}"
+        if report_key not in st.session_state:
+            st.session_state[report_key] = False
+
+        # 버튼 클릭 감지
+        if not st.session_state["reported_cards"]:
+            clicked = st.button(f"이미지·링크 불일치 신고 ({cid})", key=report_key)
         else:
+            clicked = False
+
+        if clicked and not st.session_state[report_key]:
+            try:
+                # Google Sheet에 로그 기록
+                sheet.append_row(
+                    [
+                        datetime.datetime.now().isoformat(),
+                        st.session_state.get("user_name", "익명"),
+                        "",
+                        "",
+                        f"불일치 신고 (카드ID: {cid})",
+                        cid,
+                        "",
+                        "",
+                        AB_VERSION,
+                        "신고됨",  # ab_version 옆에 기록
+                    ],
+                    value_input_option="USER_ENTERED",
+                )
+
+                st.session_state[report_key] = True
+                st.session_state["reported_cards"].append(cid)
+                st.success(f"카드ID {cid} 신고가 접수되었습니다.")
+
+            except Exception as e:
+                st.error(f"신고 저장 실패: {e}")
+
+        elif st.session_state[report_key]:
             st.info(f"이미 카드ID {cid}는 신고가 접수되었습니다.")
 
         st.write("---")
