@@ -52,7 +52,7 @@ def get_or_create_vectorstore(
     # ⚠️ 존재하지 않을 경우 ⚠️
     # 새로운 vectorstore 생성
     # 1. 데이터 로드
-    with open("data/gorilla_cards_info.json", "r", encoding="utf-8") as f:
+    with open("./cards_info.json", "r", encoding="utf-8") as f:
         docs = json.load(f)
 
     # 2. 문서 분할 (Chunking)
