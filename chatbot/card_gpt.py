@@ -42,7 +42,6 @@ def show_card_details(card_ids):
 
         img_path = data.get("image")
         if img_path:
-            # "./images/파일.png" → 절대경로 변환
             abs_img_path = os.path.normpath(
                 os.path.join(BASE_DIR, "..", img_path.replace("./", ""))
             )
@@ -51,18 +50,25 @@ def show_card_details(card_ids):
             else:
                 st.warning(f"이미지 파일을 찾을 수 없습니다: {abs_img_path}")
 
-        # 카드 링크 출력
+        # 수정된 부분: 링크 유무에 따라 버튼 또는 안내문 표시
         col1, col2 = st.columns(2)
         with col1:
-            if data.get("request_pc"):
+            link_pc = data.get("request_pc")
+            if link_pc:
                 if st.button(f"PC 링크 보기 ({cid})", key=f"pc_{cid}"):
                     clicked_cards.append(cid)
-                    st.markdown(f"[PC 신청 링크]({data['request_pc']})")
+                    st.markdown(f"[PC 신청 링크]({link_pc})")
+            else:
+                st.write("PC 신청 링크 없음")
+
         with col2:
-            if data.get("request_m"):
+            link_m = data.get("request_m")
+            if link_m:
                 if st.button(f"모바일 링크 보기 ({cid})", key=f"m_{cid}"):
                     clicked_cards.append(cid)
-                    st.markdown(f"[모바일 신청 링크]({data['request_m']})")
+                    st.markdown(f"[모바일 신청 링크]({link_m})")
+            else:
+                st.write("모바일 신청 링크 없음")
 
         st.write("---")
 
@@ -135,15 +141,12 @@ def conversation_with_memory(question, user_info):
     with image_placeholder.container():
         clicked = show_card_details(card_ids)
 
-    # 체류 시간 계산
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
-    # Memory 저장
     st.session_state["pre_memory"].save_context(
         {"input": question}, {"output": full_response}
     )
 
-    # 로그 저장 (A/B 테스트 + 사용자 행동)
     log_entry = {
         "timestamp": datetime.datetime.now().isoformat(),
         "user_info": user_info,
@@ -165,15 +168,13 @@ def conversation_with_memory(question, user_info):
 # ------------------------------- 메인 화면 -------------------------------
 st.title("당신만의 AI 카드 추천 챗봇 서비스🥰")
 
-# 1. 사용자 정보 입력
-st.subheader("사용자 정보를 선택해주세요.")
 col1, col2 = st.columns(2)
 with col1:
     age_group = st.radio(
-        "연령대", ["10대", "20대", "30대", "40대", "50대 이상"], index=1
+        "연령대", ["10대", "20대", "30대", "40대", "50대 이상"], index=0
     )
 with col2:
-    occupation = st.radio("직업", ["학생", "직장인", "취업 준비생", "기타"], index=1)
+    occupation = st.radio("직업", ["학생", "직장인", "취업 준비생", "기타"], index=0)
 user_name = st.text_input("이름 또는 닉네임을 입력하세요:", "")
 
 user_info = {
@@ -182,19 +183,16 @@ user_info = {
     "occupation": occupation,
 }
 
-# 2. 이전 대화 표시
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# 3. 사용자 입력
 question = st.chat_input("메시지를 입력하세요.")
 if question:
     st.session_state["messages"].append({"role": "user", "content": question})
     with st.chat_message("user"):
         st.write(question)
 
-# 4. AI 응답 생성
 if st.session_state["messages"][-1]["role"] != "assistant":
     with st.chat_message("assistant"):
         try:
