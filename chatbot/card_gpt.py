@@ -48,8 +48,9 @@ sheet = gc.open_by_key(SHEET_ID).sheet1
 def append_log_to_sheet(log_entry):
     """Google Sheets에 로그 추가"""
     try:
+        # Google Sheet에 기록할 행 구성
         row = [
-            log_entry.get("timestamp"),
+            log_entry.get("timestamp", ""),
             log_entry.get("user_info", {}).get("name", ""),
             log_entry.get("user_info", {}).get("age_group", ""),
             log_entry.get("user_info", {}).get("occupation", ""),
@@ -58,18 +59,14 @@ def append_log_to_sheet(log_entry):
             ", ".join(log_entry.get("clicked_cards", [])),
             log_entry.get("session_duration_sec", 0),
             log_entry.get("ab_version", ""),
-            log_entry.get("report_flag", ""),
+            log_entry.get("report_flag", "신고 아님"),  # ✅ 신고 여부 표시
         ]
 
-        # ✅ Google Sheets 연결 확인
-        st.info("📡 Google Sheets 로그 업로드 중...")
         sheet.append_row(row, value_input_option="USER_ENTERED")
-        st.success("✅ 로그가 Google Sheets에 정상적으로 기록되었습니다.")
 
     except Exception as e:
-        # ✅ 실패 시 바로 화면에 출력
-        st.error(f"❌ 로그 저장 실패: {e}")
-        st.write("▶ log_entry 내용:", log_entry)
+        st.error(f"❌ Google Sheets 로그 저장 실패: {e}")
+        st.write("▶ log_entry:", log_entry)
 
 
 # ------------------------------- 세션 및 A/B 설정 -------------------------------
@@ -141,7 +138,7 @@ def show_card_details(card_ids):
                 if f"{cid}_report" not in st.session_state["clicked_cards"]:
                     st.session_state["clicked_cards"].append(f"{cid}_report")
 
-                # ✅ 즉시 로그 기록
+                # 즉시 로그 기록
                 log_entry = {
                     "timestamp": datetime.datetime.now().isoformat(),
                     "user_info": {
