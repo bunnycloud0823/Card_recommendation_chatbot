@@ -58,11 +58,18 @@ def append_log_to_sheet(log_entry):
             ", ".join(log_entry.get("clicked_cards", [])),
             log_entry.get("session_duration_sec", 0),
             log_entry.get("ab_version", ""),
-            log_entry.get("report_flag", ""),  # ✅ 신고 여부 추가
+            log_entry.get("report_flag", ""),
         ]
+
+        # ✅ Google Sheets 연결 확인
+        st.info("📡 Google Sheets 로그 업로드 중...")
         sheet.append_row(row, value_input_option="USER_ENTERED")
+        st.success("✅ 로그가 Google Sheets에 정상적으로 기록되었습니다.")
+
     except Exception as e:
-        print(f"[로그 저장 실패] Google Sheets → {e}")
+        # ✅ 실패 시 바로 화면에 출력
+        st.error(f"❌ 로그 저장 실패: {e}")
+        st.write("▶ log_entry 내용:", log_entry)
 
 
 # ------------------------------- 세션 및 A/B 설정 -------------------------------
