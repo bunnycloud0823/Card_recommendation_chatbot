@@ -34,7 +34,6 @@ def extract_card_ids(text):
 
 def show_card_details(card_ids):
     """카드ID 기반으로 이미지·링크 표시"""
-    clicked_cards = []  # 클릭된 카드 추적용 리스트
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -50,29 +49,23 @@ def show_card_details(card_ids):
             else:
                 st.warning(f"이미지 파일을 찾을 수 없습니다: {abs_img_path}")
 
-        # 수정된 부분: 링크 유무에 따라 버튼 또는 안내문 표시
-        col1, col2 = st.columns(2)
-        with col1:
-            link_pc = data.get("request_pc")
-            if link_pc:
-                if st.button(f"PC 링크 보기 ({cid})", key=f"pc_{cid}"):
-                    clicked_cards.append(cid)
-                    st.markdown(f"[PC 신청 링크]({link_pc})")
-            else:
-                st.write("PC 신청 링크 없음")
+        # 링크 출력 (버튼 대신 직접 링크 표시)
+        pc_link = data.get("request_pc")
+        m_link = data.get("request_m")
 
-        with col2:
-            link_m = data.get("request_m")
-            if link_m:
-                if st.button(f"모바일 링크 보기 ({cid})", key=f"m_{cid}"):
-                    clicked_cards.append(cid)
-                    st.markdown(f"[모바일 신청 링크]({link_m})")
-            else:
-                st.write("모바일 신청 링크 없음")
+        if pc_link:
+            st.markdown(f"[🖥️ PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
+        else:
+            st.write("PC 신청 링크 없음")
+
+        if m_link:
+            st.markdown(f"[📱 모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True)
+        else:
+            st.write("모바일 신청 링크 없음")
 
         st.write("---")
 
-    return clicked_cards
+    return []
 
 
 # ------------------------------- 세션 초기화 -------------------------------
