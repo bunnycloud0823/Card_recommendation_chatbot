@@ -207,7 +207,7 @@ def conversation_with_memory(question, user_info):
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("당신만의 AI 카드 추천 챗봇 서비스")
+st.title("AI의 맞춤 카드 추천 챗봇🥰")
 
 col1, col2 = st.columns(2)
 with col1:
