@@ -18,7 +18,6 @@ from google.oauth2.service_account import Credentials
 # ------------------------------- 초기 설정 -------------------------------
 load_dotenv()
 
-# Streamlit Secrets에서 환경 변수 불러오기
 SHEET_ID = st.secrets["SHEET_ID"]
 
 # Google Service Account JSON 파싱
@@ -41,7 +40,6 @@ creds = Credentials.from_service_account_info(
         "https://www.googleapis.com/auth/drive",
     ],
 )
-
 gc = gspread.authorize(creds)
 sheet = gc.open_by_key(SHEET_ID).sheet1
 
@@ -70,13 +68,13 @@ def append_log_to_sheet(log_entry):
 AB_VERSION = random.choice(["A", "B"])
 SESSION_START = datetime.datetime.now()
 
+
 # ------------------------------- 카드 링크·이미지 로드 -------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LINK_IMAGE_PATH = os.path.join(BASE_DIR, "cards_link_image.json")
 
 with open(LINK_IMAGE_PATH, "r", encoding="utf-8") as f:
     link_data = json.load(f)
-
 LINK_DB = {str(item["card_id"]): item for item in link_data}
 
 
@@ -87,7 +85,9 @@ def extract_card_ids(text):
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적"""
+    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 오류 신고 기능"""
+    clicked = []
+
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -106,27 +106,43 @@ def show_card_details(card_ids):
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
 
-        # 클릭 가능한 하이퍼링크 형태로 출력
-        if pc_link:
-            st.markdown(
-                f"[🖥️ **PC 신청 링크 열기 ({cid})**]({pc_link})",
-                unsafe_allow_html=True,
-            )
-            if f"{cid}_pc" not in st.session_state["clicked_cards"]:
-                st.session_state["clicked_cards"].append(f"{cid}_pc")
+        # 클릭 버튼 생성
+        col1, col2 = st.columns(2)
+        with col1:
+            if pc_link and st.button(f"🖥️ PC 신청 ({cid})", key=f"pc_{cid}"):
+                clicked.append(f"{cid}_pc")
+                st.markdown(f"[PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
+        with col2:
+            if m_link and st.button(f"📱 모바일 신청 ({cid})", key=f"m_{cid}"):
+                clicked.append(f"{cid}_m")
+                st.markdown(
+                    f"[모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True
+                )
 
-        if m_link:
-            st.markdown(
-                f"[📱 **모바일 신청 링크 열기 ({cid})**]({m_link})",
-                unsafe_allow_html=True,
-            )
-            if f"{cid}_m" not in st.session_state["clicked_cards"]:
-                st.session_state["clicked_cards"].append(f"{cid}_m")
-
-        if not pc_link and not m_link:
-            st.write("신청 링크 없음")
+        # 오류 신고 버튼
+        if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
+            try:
+                sheet.append_row(
+                    [
+                        datetime.datetime.now().isoformat(),
+                        st.session_state.get("user_name", "익명"),
+                        "",
+                        "",
+                        f"불일치 신고 (카드ID: {cid})",
+                        cid,
+                        "",
+                        "",
+                        AB_VERSION,
+                    ],
+                    value_input_option="USER_ENTERED",
+                )
+                st.success(f"카드ID {cid} 신고가 접수되었습니다.")
+            except Exception as e:
+                st.error(f"신고 저장 실패: {e}")
 
         st.write("---")
+
+    return clicked
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -137,14 +153,15 @@ if "pre_memory" not in st.session_state:
 
 if "messages" not in st.session_state:
     st.session_state["messages"] = [
-        {
-            "role": "assistant",
-            "content": "안녕하세요. 저는 AI 카드 추천 전문가입니다. 당신에게 맞는 카드를 추천해드릴게요.",
-        }
+        {"role": "assistant", "content": "안녕하세요. AI 카드 추천 전문가입니다."}
     ]
 
 if "clicked_cards" not in st.session_state:
     st.session_state["clicked_cards"] = []
+
+if "recommended_cards" not in st.session_state:
+    st.session_state["recommended_cards"] = []
+
 
 # ------------------------------- 모델 설정 -------------------------------
 model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
@@ -156,17 +173,19 @@ context 내용에 한해서만 추천해주되, context에 없는 내용은 발�
 각 카드의 마지막 줄에는 반드시 '카드ID: {{card_id}}'를 포함시켜줘.
 
 --출력 포맷--
-📌 해당란에 먼저 사용자가 어떤 카드를 원하는지 파악해서 요약본을 한 줄로 작성해줘.
-💳 추천카드명
-    - 추천 이유
-    - 해당 카드의 혜택
-💳 추천카드명
-    - 추천 이유
-    - 해당 카드의 혜택
+📌 요약 (사용자 니즈 요약)
+💳 카드명
+  - 추천 이유
+  - 주요 혜택
+카드ID: 
+💳 카드명
+  - 추천 이유
+  - 주요 혜택
+카드ID: 
 """
 
 user_prompt = """\
-아래의 사용자 question을 읽고 context를 참고하여 가장 적합한 카드(사용자가 혜택을 최대로 받을 수 있는 카드)를 추천해주세요.
+아래의 사용자 question을 읽고 context를 참고하여 가장 적합한 카드를 추천해주세요.
 
 --chat_history-- 
 {chat_history}
@@ -203,8 +222,9 @@ def conversation_with_memory(question, user_info):
         stream_placeholder.write(full_response)
 
     card_ids = extract_card_ids(full_response)
+
     with image_placeholder.container():
-        show_card_details(card_ids)
+        clicked = show_card_details(card_ids)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -218,17 +238,22 @@ def conversation_with_memory(question, user_info):
         "query": question,
         "response": full_response,
         "card_ids": card_ids,
-        "clicked_cards": st.session_state.get("clicked_cards", []),
+        "clicked_cards": clicked,
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
     }
+
+    # 세션에 카드 저장 (리렌더링 유지)
+    st.session_state["recommended_cards"].append(
+        {"response": full_response, "card_ids": card_ids}
+    )
 
     append_log_to_sheet(log_entry)
     return full_response
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("AI의 맞춤 카드 추천 챗봇🥰")
+st.title("AI 맞춤 카드 추천 챗봇")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -237,7 +262,9 @@ with col1:
     )
 with col2:
     occupation = st.radio("직업", ["학생", "직장인", "취업 준비생", "기타"], index=0)
+
 user_name = st.text_input("닉네임을 입력하세요:", "")
+st.session_state["user_name"] = user_name
 
 user_info = {
     "name": user_name or "익명",
@@ -245,11 +272,20 @@ user_info = {
     "occupation": occupation,
 }
 
+# 이전 대화 및 추천 카드 유지
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-question = st.chat_input("메시지를 입력하세요.")
+# 이전 추천 카드 표시
+if st.session_state["recommended_cards"]:
+    st.subheader("이전 추천 카드 목록")
+    for rec in st.session_state["recommended_cards"]:
+        st.write(rec["response"])
+        show_card_details(rec["card_ids"])
+
+# 입력창
+question = st.chat_input("카드 관련 불편사항을 입력하세요.")
 if question:
     st.session_state["messages"].append({"role": "user", "content": question})
     with st.chat_message("user"):
