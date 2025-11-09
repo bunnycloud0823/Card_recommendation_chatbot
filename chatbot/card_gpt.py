@@ -87,11 +87,7 @@ def extract_card_ids(text):
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 오류 신고 기능"""
-
-    # 세션에 신고 상태 저장 리스트가 없으면 초기화
-    if "reported_cards" not in st.session_state:
-        st.session_state["reported_cards"] = []
+    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 기능"""
 
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
@@ -130,46 +126,6 @@ def show_card_details(card_ids):
         if not pc_link and not m_link:
             st.write("신청 링크 없음")
 
-        # 버튼 클릭 후 재렌더링 문제 해결
-        report_key = f"report_{cid}"
-        if report_key not in st.session_state:
-            st.session_state[report_key] = False
-
-        # 버튼 클릭 감지
-        if not st.session_state["reported_cards"]:
-            clicked = st.button(f"이미지·링크 불일치 신고 ({cid})", key=report_key)
-        else:
-            clicked = False
-
-        if clicked and not st.session_state[report_key]:
-            try:
-                # Google Sheet에 로그 기록
-                sheet.append_row(
-                    [
-                        datetime.datetime.now().isoformat(),
-                        st.session_state.get("user_name", "익명"),
-                        "",
-                        "",
-                        f"불일치 신고 (카드ID: {cid})",
-                        cid,
-                        "",
-                        "",
-                        AB_VERSION,
-                        "신고됨",  # ab_version 옆에 기록
-                    ],
-                    value_input_option="USER_ENTERED",
-                )
-
-                st.session_state[report_key] = True
-                st.session_state["reported_cards"].append(cid)
-                st.success(f"카드ID {cid} 신고가 접수되었습니다.")
-
-            except Exception as e:
-                st.error(f"신고 저장 실패: {e}")
-
-        elif st.session_state[report_key]:
-            st.info(f"이미 카드ID {cid}는 신고가 접수되었습니다.")
-
         st.write("---")
 
 
@@ -203,11 +159,11 @@ context 내용에 한해서만 추천해주되, context에 없는 내용은 발�
 각 카드의 마지막 줄에는 반드시 '카드ID: {{card_id}}'를 포함시켜줘.
 
 --출력 포맷--
-📌 해당란에 먼저 사용자가 어떤 카드를 원하는지 파악해서 요약본을 한 줄로 작성해줘.
-💳 추천카드명 
+해당란에 먼저 사용자가 어떤 카드를 원하는지 파악해서 요약본을 한 줄로 작성해줘.
+추천카드명 
 - 추천 이유 
 - 해당 카드의 혜택
-💳 추천카드명 
+추천카드명 
 - 추천 이유 
 - 해당 카드의 혜택
 """
@@ -278,7 +234,7 @@ def conversation_with_memory(question, user_info):
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("AI의 맞춤 카드 추천 챗봇🥰")
+st.title("AI의 맞춤 카드 추천 챗봇")
 
 col1, col2 = st.columns(2)
 with col1:
