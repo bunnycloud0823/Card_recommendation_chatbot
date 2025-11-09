@@ -163,7 +163,7 @@ def conversation_with_memory(question, user_info):
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("🥰당신만의 AI 카드 추천 챗봇 서비스🥰")
+st.title("당신만의 AI 카드 추천 챗봇 서비스🥰")
 
 # 1. 사용자 정보 입력
 st.subheader("사용자 정보를 선택해주세요.")
