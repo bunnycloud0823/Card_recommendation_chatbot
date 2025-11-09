@@ -19,7 +19,18 @@ AB_VERSION = random.choice(["A", "B"])
 SESSION_START = datetime.datetime.now()
 
 # ------------------------------- 카드 링크·이미지 로드 -------------------------------
-with open("./cards_link_image.json", "r", encoding="utf-8") as f:
+import os, json, re
+import streamlit as st
+
+# 현재 실행 파일 기준 상대 경로
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# 데이터 파일 경로
+LINK_IMAGE_PATH = os.path.join(BASE_DIR, "cards_link_image.json")
+IMAGE_DIR = os.path.join(BASE_DIR, "../images")
+
+# JSON 파일 로드
+with open(LINK_IMAGE_PATH, "r", encoding="utf-8") as f:
     link_data = json.load(f)
 LINK_DB = {str(item["card_id"]): item for item in link_data}
 
@@ -30,30 +41,36 @@ def extract_card_ids(text):
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적"""
-    clicked_cards = []
+    """카드ID 기반으로 이미지·링크 표시"""
+    clicked_cards = []  # 클릭된 카드 추적용 리스트
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
             continue
 
-        st.write(f"카드 ID: {cid}")
         img_path = data.get("image")
+        if img_path:
+            # "./images/파일.png" → 절대경로 변환
+            abs_img_path = os.path.normpath(
+                os.path.join(BASE_DIR, "..", img_path.replace("./", ""))
+            )
+            if os.path.exists(abs_img_path):
+                st.image(abs_img_path, width=250)
+            else:
+                st.warning(f"이미지 파일을 찾을 수 없습니다: {abs_img_path}")
 
-        if img_path and os.path.exists(img_path):
-            st.image(img_path, width=250)
-        elif img_path:
-            st.image(img_path, width=250)
-
+        # 카드 링크 출력
         col1, col2 = st.columns(2)
         with col1:
-            if st.button(f"PC 링크 보기 ({cid})", key=f"pc_{cid}"):
-                clicked_cards.append(cid)
-                st.markdown(f"[바로가기]({data['request_pc']})")
+            if data.get("request_pc"):
+                if st.button(f"PC 링크 보기 ({cid})", key=f"pc_{cid}"):
+                    clicked_cards.append(cid)
+                    st.markdown(f"[PC 신청 링크]({data['request_pc']})")
         with col2:
-            if st.button(f"모바일 링크 보기 ({cid})", key=f"m_{cid}"):
-                clicked_cards.append(cid)
-                st.markdown(f"[바로가기]({data['request_m']})")
+            if data.get("request_m"):
+                if st.button(f"모바일 링크 보기 ({cid})", key=f"m_{cid}"):
+                    clicked_cards.append(cid)
+                    st.markdown(f"[모바일 신청 링크]({data['request_m']})")
 
         st.write("---")
 
