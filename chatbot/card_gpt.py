@@ -1,9 +1,9 @@
+import streamlit as st
+import json
 import os
 import re
-import json
 import random
 import datetime
-import streamlit as st
 from dotenv import load_dotenv
 from card_rag import search_card
 from langchain_openai import ChatOpenAI
@@ -13,6 +13,7 @@ from langchain.memory import ConversationBufferMemory
 from langchain_core.runnables import RunnableLambda
 import gspread
 from google.oauth2.service_account import Credentials
+
 
 # ------------------------------- 초기 설정 -------------------------------
 load_dotenv()
@@ -68,6 +69,7 @@ def append_log_to_sheet(log_entry):
 AB_VERSION = random.choice(["A", "B"])
 SESSION_START = datetime.datetime.now()
 
+
 # ------------------------------- 카드 링크·이미지 로드 -------------------------------
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 LINK_IMAGE_PATH = os.path.join(BASE_DIR, "cards_link_image.json")
@@ -86,6 +88,11 @@ def extract_card_ids(text):
 
 def show_card_details(card_ids):
     """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 오류 신고 기능"""
+
+    # 신고 상태 저장용 세션 추가
+    if "reported_cards" not in st.session_state:
+        st.session_state["reported_cards"] = []
+
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -124,34 +131,38 @@ def show_card_details(card_ids):
         if not pc_link and not m_link:
             st.write("신청 링크 없음")
 
-        # 오류 신고 버튼
-        if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
-            report_entry = {
-                "timestamp": datetime.datetime.now().isoformat(),
-                "report_type": "불일치 신고",
-                "card_id": cid,
-                "user_name": st.session_state.get("user_name", "익명"),
-                "ab_version": AB_VERSION,
-            }
+        if cid not in st.session_state["reported_cards"]:
+            if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
+                report_entry = {
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "report_type": "불일치 신고",
+                    "card_id": cid,
+                    "user_name": st.session_state.get("user_name", "익명"),
+                    "ab_version": AB_VERSION,
+                }
+                try:
+                    sheet.append_row(
+                        [
+                            report_entry["timestamp"],
+                            report_entry["user_name"],
+                            "",
+                            "",
+                            f"불일치 신고 (카드ID: {cid})",
+                            cid,
+                            "",
+                            "",
+                            report_entry["ab_version"],
+                            "신고됨",
+                        ],
+                        value_input_option="USER_ENTERED",
+                    )
+                    st.session_state["reported_cards"].append(cid)
+                    st.success(f"카드ID {cid} 신고가 접수되었습니다.")
+                except Exception as e:
+                    st.error(f"신고 저장 실패: {e}")
+        else:
+            st.info(f"이미 카드ID {cid}는 신고가 접수되었습니다.")
 
-            try:
-                sheet.append_row(
-                    [
-                        report_entry["timestamp"],
-                        report_entry["user_name"],
-                        "",
-                        "",
-                        f"불일치 신고 (카드ID: {cid})",
-                        cid,
-                        "",
-                        "",
-                        report_entry["ab_version"],
-                    ],
-                    value_input_option="USER_ENTERED",
-                )
-                st.success(f"카드ID {cid} 신고가 접수되었습니다.")
-            except Exception as e:
-                st.error(f"신고 저장 실패: {e}")
         st.write("---")
 
 
@@ -173,6 +184,7 @@ if "messages" not in st.session_state:
 if "clicked_cards" not in st.session_state:
     st.session_state["clicked_cards"] = []
 
+
 # ------------------------------- 모델 설정 -------------------------------
 model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
@@ -184,9 +196,13 @@ context 내용에 한해서만 추천해주되, context에 없는 내용은 발�
 각 카드의 마지막 줄에는 반드시 '카드ID: {{card_id}}'를 포함시켜줘.
 
 --출력 포맷--
-📌 먼저 사용자가 원하는 카드 유형을 한 줄 요약.
-💳 추천카드명 - 추천 이유 - 혜택
-💳 추천카드명 - 추천 이유 - 혜택
+📌 해당란에 먼저 사용자가 어떤 카드를 원하는지 파악해서 요약본을 한 줄로 작성해줘.
+💳 추천카드명 
+- 추천 이유 
+- 해당 카드의 혜택
+💳 추천카드명 
+- 추천 이유 
+- 해당 카드의 혜택
 """
 
 user_prompt = """
@@ -248,21 +264,29 @@ def conversation_with_memory(question, user_info):
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
     }
+
     append_log_to_sheet(log_entry)
 
     return full_response
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("AI의 맞춤 카드 추천 챗봇")
+st.title("AI의 맞춤 카드 추천 챗봇🥰")
 
 col1, col2 = st.columns(2)
 with col1:
     age_group = st.radio(
-        "연령대", ["10대", "20대", "30대", "40대", "50대 이상"], index=0
+        "연령대",
+        ["10대", "20대", "30대", "40대", "50대 이상"],
+        index=0,
     )
+
 with col2:
-    occupation = st.radio("직업", ["학생", "직장인", "취업 준비생", "기타"], index=0)
+    occupation = st.radio(
+        "직업",
+        ["학생", "직장인", "취업 준비생", "기타"],
+        index=0,
+    )
 
 user_name = st.text_input("닉네임을 입력하세요:", "")
 
