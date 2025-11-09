@@ -4,6 +4,7 @@ import os
 import re
 import random
 import datetime
+import time
 from dotenv import load_dotenv
 from card_rag import search_card
 from langchain_openai import ChatOpenAI
@@ -39,7 +40,6 @@ def append_log_to_sheet(log_entry):
         ab_value = log_entry.get("ab_version", "")
         if log_entry.get("report_flag"):
             ab_value = f"{ab_value} (신고)"
-
         row = [
             log_entry.get("timestamp", ""),
             log_entry.get("user_info", {}).get("name", ""),
@@ -127,7 +127,6 @@ def show_card_details(card_ids, user_info, question):
             else:
                 if st.button(f"신고 ({cid})", key=f"report_{cid}"):
                     st.session_state["reported_cards"].append(f"{cid}_report")
-
                     log_entry = {
                         "timestamp": datetime.datetime.now().isoformat(),
                         "user_info": user_info,
@@ -145,7 +144,7 @@ def show_card_details(card_ids, user_info, question):
 
 
 # ------------------------------- LangChain 모델 -------------------------------
-model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
+model = ChatOpenAI(model="gpt-4o-mini", temperature=0, max_tokens=512)
 system_prompt = """
 너는 카드사 직원이야. 고객의 질문에 따라 context에 있는 카드 중에서 혜택이 가장 많은 카드 2개를 추천해줘.
 각 카드 설명의 마지막 줄에는 반드시 '카드ID: {{card_id}}'를 포함해줘.
@@ -173,9 +172,20 @@ chain = RunnableLambda(get_user_input) | final_prompt | model | StrOutputParser(
 # ------------------------------- 대화 함수 -------------------------------
 def conversation_with_memory(question, user_info):
     full_response = ""
-    for chunk in chain.stream(question):
-        full_response += chunk
-        st.write(full_response)
+    retries = 3
+    for attempt in range(retries):
+        try:
+            for chunk in chain.stream(question):
+                full_response += chunk
+                st.write(full_response)
+            break
+        except Exception as e:
+            if attempt < retries - 1:
+                st.warning(f"서버 오류 발생, 재시도 중... ({attempt + 1}/{retries})")
+                time.sleep(2)
+            else:
+                st.error("서버 오류가 계속 발생했습니다. 나중에 다시 시도해주세요.")
+                return ""
 
     card_ids = re.findall(r"카드ID\s*:\s*(\d+)", full_response)
     show_card_details(card_ids, user_info, question)
