@@ -48,6 +48,11 @@ sheet = gc.open_by_key(SHEET_ID).sheet1
 def append_log_to_sheet(log_entry):
     """Google Sheets에 로그 추가"""
     try:
+        # 신고 여부를 AB 버전에 병합
+        ab_value = log_entry.get("ab_version", "")
+        if log_entry.get("report_flag"):
+            ab_value = f"{ab_value} (신고)"  # 신고일 경우만 표시
+
         # Google Sheet에 기록할 행 구성
         row = [
             log_entry.get("timestamp", ""),
@@ -58,8 +63,7 @@ def append_log_to_sheet(log_entry):
             ", ".join(log_entry.get("card_ids", [])),
             ", ".join(log_entry.get("clicked_cards", [])),
             log_entry.get("session_duration_sec", 0),
-            log_entry.get("ab_version", ""),
-            log_entry.get("report_flag", "신고 아님"),  # ✅ 신고 여부 표시
+            ab_value,  #  신고 표시 포함
         ]
 
         sheet.append_row(row, value_input_option="USER_ENTERED")
@@ -138,14 +142,17 @@ def show_card_details(card_ids):
                 if f"{cid}_report" not in st.session_state["clicked_cards"]:
                     st.session_state["clicked_cards"].append(f"{cid}_report")
 
-                # 즉시 로그 기록
+                # 세션에서 user_info 가져오기
+                user_info = {
+                    "name": st.session_state.get("user_name", "익명"),
+                    "age_group": st.session_state.get("user_age_group", ""),
+                    "occupation": st.session_state.get("user_occupation", ""),
+                }
+
+                # 즉시 로그 기록 (한 줄)
                 log_entry = {
-                    "timestamp": datetime.datetime.now().isoformat(),
-                    "user_info": {
-                        "name": st.session_state.get("user_name", "익명"),
-                        "age_group": "",
-                        "occupation": "",
-                    },
+                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                    "user_info": user_info,
                     "query": f"불일치 신고 (카드ID: {cid})",
                     "response": "",
                     "card_ids": [str(cid)],
@@ -159,8 +166,6 @@ def show_card_details(card_ids):
                 st.success(f"카드ID {cid} 신고가 접수되었습니다.")
             except Exception as e:
                 st.error(f"신고 저장 실패: {e}")
-
-        st.write("---")
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -287,6 +292,7 @@ with col2:
 
 user_name = st.text_input("닉네임을 입력하세요:", "")
 st.session_state["user_name"] = user_name
+
 
 user_info = {
     "name": user_name or "익명",
