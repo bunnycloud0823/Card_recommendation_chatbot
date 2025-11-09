@@ -18,10 +18,12 @@ from google.oauth2.service_account import Credentials
 
 # ------------------------------- 초기 설정 -------------------------------
 load_dotenv()
-SHEET_ID = os.getenv("SHEET_ID")
 
-# Google Sheets 인증 (환경 변수 사용)
-service_account_info = json.loads(os.getenv("GOOGLE_SERVICE_ACCOUNT"))
+# Streamlit Secrets에서 환경 변수 불러오기
+SHEET_ID = st.secrets["SHEET_ID"]
+service_account_info = json.loads(st.secrets["GOOGLE_SERVICE_ACCOUNT"])
+
+# Google Sheets 인증
 creds = Credentials.from_service_account_info(
     service_account_info,
     scopes=[
@@ -29,7 +31,6 @@ creds = Credentials.from_service_account_info(
         "https://www.googleapis.com/auth/drive",
     ],
 )
-
 gc = gspread.authorize(creds)
 sheet = gc.open_by_key(SHEET_ID).sheet1
 
@@ -94,12 +95,12 @@ def show_card_details(card_ids):
         m_link = data.get("request_m")
 
         if pc_link:
-            st.markdown(f"[🖥️ PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
+            st.markdown(f"[PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
         else:
             st.write("PC 신청 링크 없음")
 
         if m_link:
-            st.markdown(f"[📱 모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True)
+            st.markdown(f"[모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True)
         else:
             st.write("모바일 신청 링크 없음")
 
@@ -190,9 +191,7 @@ def conversation_with_memory(question, user_info):
         "ab_version": AB_VERSION,
     }
 
-    # Google Sheets에 로그 기록
     append_log_to_sheet(log_entry)
-
     return full_response
 
 
