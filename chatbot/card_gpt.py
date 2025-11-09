@@ -183,7 +183,7 @@ def conversation_with_memory(question, user_info):
 
     card_ids = extract_card_ids(full_response)
     with image_placeholder.container():
-        show_card_details(card_ids)
+        clicked = show_card_details(card_ids)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -197,7 +197,7 @@ def conversation_with_memory(question, user_info):
         "query": question,
         "response": full_response,
         "card_ids": card_ids,
-        "clicked_cards": [],
+        "clicked_cards": clicked,  # 실제 클릭된 카드ID 저장
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
     }
