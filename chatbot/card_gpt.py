@@ -20,17 +20,16 @@ from google.oauth2.service_account import Credentials
 load_dotenv()
 SHEET_ID = os.getenv("SHEET_ID")
 
-# Google Sheets API 설정
-CREDENTIALS_PATH = "./service_account.json"  # 서비스 계정 JSON 키 파일
-
-# Google Sheets 인증
-creds = Credentials.from_service_account_file(
-    CREDENTIALS_PATH,
+# Google Sheets 인증 (환경 변수 사용)
+service_account_info = json.loads(os.getenv("GOOGLE_SERVICE_ACCOUNT"))
+creds = Credentials.from_service_account_info(
+    service_account_info,
     scopes=[
         "https://www.googleapis.com/auth/spreadsheets",
         "https://www.googleapis.com/auth/drive",
     ],
 )
+
 gc = gspread.authorize(creds)
 sheet = gc.open_by_key(SHEET_ID).sheet1
 
