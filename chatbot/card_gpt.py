@@ -216,7 +216,7 @@ with col1:
     )
 with col2:
     occupation = st.radio("직업", ["학생", "직장인", "취업 준비생", "기타"], index=0)
-user_name = st.text_input("이름 또는 닉네임을 입력하세요:", "")
+user_name = st.text_input("닉네임을 입력하세요:", "")
 
 user_info = {
     "name": user_name or "익명",
