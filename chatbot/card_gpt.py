@@ -285,7 +285,7 @@ if st.session_state["recommended_cards"]:
         show_card_details(rec["card_ids"])
 
 # 입력창
-question = st.chat_input("카드 관련 불편사항을 입력하세요.")
+question = st.chat_input("카드 추천만 가능해요.")
 if question:
     st.session_state["messages"].append({"role": "user", "content": question})
     with st.chat_message("user"):
