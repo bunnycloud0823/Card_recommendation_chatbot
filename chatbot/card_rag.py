@@ -10,6 +10,8 @@ load_dotenv()
 
 # 현재 파일 기준 절대 경로 설정
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+with open(os.path.join(BASE_DIR, "cards_info.json"), "r", encoding="utf-8") as f:
+    docs = json.load(f)
 
 
 # vectorstore 객체 생성 함수 정의
