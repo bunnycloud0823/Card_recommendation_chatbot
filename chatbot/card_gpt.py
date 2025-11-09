@@ -148,20 +148,26 @@ def show_card_details(card_ids):
         # 불일치 신고 버튼
         if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
             try:
-                sheet.append_row(
-                    [
-                        datetime.datetime.now().isoformat(),
-                        st.session_state.get("user_name", "익명"),
-                        "",
-                        "",
-                        f"불일치 신고 (카드ID: {cid})",
-                        cid,
-                        "",
-                        "",
-                        AB_VERSION,
-                    ],
-                    value_input_option="USER_ENTERED",
-                )
+                # 클릭 카드 기록에 "report" 추가
+                st.session_state["clicked_cards"].append(f"{cid}_report")
+
+                # 기존 로그와 동일하게 한 줄로 기록
+                log_entry = {
+                    "timestamp": datetime.datetime.now().isoformat(),
+                    "user_info": {
+                        "name": st.session_state.get("user_name", "익명"),
+                        "age_group": "",
+                        "occupation": "",
+                    },
+                    "query": f"불일치 신고 (카드ID: {cid})",
+                    "response": "",
+                    "card_ids": [str(cid)],
+                    "clicked_cards": st.session_state["clicked_cards"],
+                    "session_duration_sec": 0,
+                    "ab_version": AB_VERSION,
+                }
+
+                append_log_to_sheet(log_entry)
                 st.success(f"카드ID {cid} 신고가 접수되었습니다.")
             except Exception as e:
                 st.error(f"신고 저장 실패: {e}")
