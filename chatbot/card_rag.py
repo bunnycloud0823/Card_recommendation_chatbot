@@ -51,7 +51,7 @@ def get_or_create_vectorstore(
         docs = json.load(f)
 
     splitter = RecursiveCharacterTextSplitter()
-    split_docs = splitter.create_documents([str(dict_) for dict_ in docs])
+    split_docs = splitter.create_documents([str(dict_ or "") for dict_ in docs])
 
     vectorstore = Chroma.from_documents(
         documents=split_docs,
