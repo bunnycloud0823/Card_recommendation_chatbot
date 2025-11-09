@@ -8,10 +8,13 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# 현재 파일 기준 절대 경로 설정
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
 
 # vectorstore 객체 생성 함수 정의
 def get_or_create_vectorstore(
-    persist_directory="./Chroma", collection_name="Card_recommendation_chatbot"
+    persist_directory="./Chroma", collection_name="card_info"
 ):
     """
     vectorstore가 존재하면 로드하고, 없으면 새로 생성합니다.
@@ -75,7 +78,7 @@ def get_or_create_vectorstore(
 def search_card(
     question,
     persist_directory="./Chroma",
-    collection_name="Card_recommendation_chatbot",
+    collection_name="card_info",
 ):
     """
     카드 정보를 검색합니다.
