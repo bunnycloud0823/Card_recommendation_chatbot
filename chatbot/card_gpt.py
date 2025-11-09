@@ -17,10 +17,10 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 st.write(
-    "✅ GOOGLE_SERVICE_ACCOUNT 타입:", type(st.secrets.get("GOOGLE_SERVICE_ACCOUNT"))
+    "✅ GOOGLE_SERVICE_ACCOUNT 타입:",
+    str(type(st.secrets.get("GOOGLE_SERVICE_ACCOUNT"))),
 )
-st.write("✅ 길이:", len(st.secrets.get("GOOGLE_SERVICE_ACCOUNT", "")))
-
+st.write("✅ 길이:", str(len(st.secrets.get("GOOGLE_SERVICE_ACCOUNT", ""))))
 
 # ------------------------------- 초기 설정 -------------------------------
 load_dotenv()
