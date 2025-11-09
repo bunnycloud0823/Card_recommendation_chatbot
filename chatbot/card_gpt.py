@@ -18,10 +18,10 @@ from google.oauth2.service_account import Credentials
 
 # ------------------------------- 초기 설정 -------------------------------
 load_dotenv()
+SHEET_ID = os.getenv("SHEET_ID")
 
 # Google Sheets API 설정
 CREDENTIALS_PATH = "./service_account.json"  # 서비스 계정 JSON 키 파일
-SHEET_ID = "1smRHASYfErNH8IQZYyn7m-lCegGlUjZt1Z_BIcRlKhE"  # 구글 시트 ID 입력
 
 # Google Sheets 인증
 creds = Credentials.from_service_account_file(
