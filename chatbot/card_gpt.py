@@ -106,19 +106,25 @@ def show_card_details(card_ids):
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
 
-        col1, col2 = st.columns(2)
-        with col1:
-            if pc_link and st.button(f"PC 신청 ({cid})", key=f"pc_{cid}"):
-                if f"{cid}_pc" not in st.session_state["clicked_cards"]:
-                    st.session_state["clicked_cards"].append(f"{cid}_pc")
-                st.markdown(f"[PC 신청 링크 열기]({pc_link})", unsafe_allow_html=True)
-        with col2:
-            if m_link and st.button(f"모바일 신청 ({cid})", key=f"m_{cid}"):
-                if f"{cid}_m" not in st.session_state["clicked_cards"]:
-                    st.session_state["clicked_cards"].append(f"{cid}_m")
-                st.markdown(
-                    f"[모바일 신청 링크 열기]({m_link})", unsafe_allow_html=True
-                )
+        # 클릭 가능한 하이퍼링크 형태로 출력
+        if pc_link:
+            st.markdown(
+                f"[🖥️ **PC 신청 링크 열기 ({cid})**]({pc_link})",
+                unsafe_allow_html=True,
+            )
+            if f"{cid}_pc" not in st.session_state["clicked_cards"]:
+                st.session_state["clicked_cards"].append(f"{cid}_pc")
+
+        if m_link:
+            st.markdown(
+                f"[📱 **모바일 신청 링크 열기 ({cid})**]({m_link})",
+                unsafe_allow_html=True,
+            )
+            if f"{cid}_m" not in st.session_state["clicked_cards"]:
+                st.session_state["clicked_cards"].append(f"{cid}_m")
+
+        if not pc_link and not m_link:
+            st.write("신청 링크 없음")
 
         st.write("---")
 
