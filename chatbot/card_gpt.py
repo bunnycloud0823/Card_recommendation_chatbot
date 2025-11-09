@@ -29,7 +29,7 @@ try:
     else:
         service_account_info = parsed
 except json.JSONDecodeError as e:
-    st.error(f"❌ JSON 파싱 오류: {e}")
+    st.error(f"JSON 파싱 오류: {e}")
     st.stop()
 
 # Google 인증 객체 생성
@@ -48,12 +48,10 @@ sheet = gc.open_by_key(SHEET_ID).sheet1
 def append_log_to_sheet(log_entry):
     """Google Sheets에 로그 추가"""
     try:
-        # 신고 여부를 AB 버전에 병합
         ab_value = log_entry.get("ab_version", "")
         if log_entry.get("report_flag"):
-            ab_value = f"{ab_value} (신고)"  # 신고일 경우만 표시
+            ab_value = f"{ab_value} (신고)"
 
-        # Google Sheet에 기록할 행 구성
         row = [
             log_entry.get("timestamp", ""),
             log_entry.get("user_info", {}).get("name", ""),
@@ -63,13 +61,13 @@ def append_log_to_sheet(log_entry):
             ", ".join(log_entry.get("card_ids", [])),
             ", ".join(log_entry.get("clicked_cards", [])),
             log_entry.get("session_duration_sec", 0),
-            ab_value,  #  신고 표시 포함
+            ab_value,
         ]
 
         sheet.append_row(row, value_input_option="USER_ENTERED")
 
     except Exception as e:
-        st.error(f"❌ Google Sheets 로그 저장 실패: {e}")
+        st.error(f"Google Sheets 로그 저장 실패: {e}")
         st.write("▶ log_entry:", log_entry)
 
 
@@ -94,7 +92,7 @@ def extract_card_ids(text):
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + 신고 기능"""
+    """카드ID 기반으로 이미지·링크 표시 및 신고 처리"""
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -117,7 +115,9 @@ def show_card_details(card_ids):
         with col1:
             if pc_link:
                 st.markdown(
-                    f'<a href="{pc_link}" target="_blank"><button style="background-color:#0072C6;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">🖥️ PC 신청 ({cid})</button></a>',
+                    f'<a href="{pc_link}" target="_blank">'
+                    f'<button style="background-color:#0072C6;color:white;border:none;padding:8px 16px;'
+                    f'border-radius:6px;cursor:pointer;">PC 신청 ({cid})</button></a>',
                     unsafe_allow_html=True,
                 )
                 if f"{cid}_pc" not in st.session_state["clicked_cards"]:
@@ -128,7 +128,9 @@ def show_card_details(card_ids):
         with col2:
             if m_link:
                 st.markdown(
-                    f'<a href="{m_link}" target="_blank"><button style="background-color:#28a745;color:white;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;">📱 모바일 신청 ({cid})</button></a>',
+                    f'<a href="{m_link}" target="_blank">'
+                    f'<button style="background-color:#28a745;color:white;border:none;padding:8px 16px;'
+                    f'border-radius:6px;cursor:pointer;">모바일 신청 ({cid})</button></a>',
                     unsafe_allow_html=True,
                 )
                 if f"{cid}_m" not in st.session_state["clicked_cards"]:
@@ -136,11 +138,16 @@ def show_card_details(card_ids):
             else:
                 st.write("모바일 신청 링크 없음")
 
-        # ------------------- 신고 버튼 처리 -------------------
-        if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
-            st.session_state["clicked_cards"].append(f"{cid}_report")
-            st.session_state["report_flag"] = True  # ✅ 세션에 신고 여부 저장
-            st.success(f"카드ID {cid} 신고가 접수되었습니다. (로그에 반영됩니다)")
+        reported_cards = st.session_state.get("reported_cards", [])
+
+        if f"{cid}_report" in reported_cards:
+            st.info(f"이미 카드ID {cid}에 대한 신고가 접수되었습니다.")
+        else:
+            if st.button(f"이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
+                reported_cards.append(f"{cid}_report")
+                st.session_state["reported_cards"] = reported_cards
+                st.session_state["report_flag"] = True
+                st.success(f"카드ID {cid} 신고가 접수되었습니다. 로그에 반영됩니다.")
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -163,26 +170,24 @@ if "recommended_cards" not in st.session_state:
 if "report_flag" not in st.session_state:
     st.session_state["report_flag"] = ""
 
+if "reported_cards" not in st.session_state:
+    st.session_state["reported_cards"] = []
+
 
 # ------------------------------- 모델 설정 -------------------------------
 model = ChatOpenAI(model="gpt-4o-mini", temperature=0)
 
 system_prompt = """
-너는 카드사 직원이야. 고객의 질의가 들어오면 context에 따라 가장 혜택이 2개 추천해줘. 
+너는 카드사 직원이야. 고객의 질의가 들어오면 context에 따라 가장 혜택이 2개 추천해줘.
 신용카드, 체크카드에 대한 명시가 없을 경우 신용카드, 체크카드 각각 1개씩 추천하고 명시할 경우 해당 카드로 2개 추천해줘.
 context 내용에 한해서만 추천해주되, context에 없는 내용은 발설하지 말아줘.
 각 카드의 마지막 줄에는 반드시 '카드ID: {{card_id}}'를 포함시켜줘.
 
---출력 포맷--
-📌 요약 (사용자 니즈 요약)
-💳 카드명
-  - 추천 이유
-  - 주요 혜택
-카드ID: 
-💳 카드명
-  - 추천 이유
-  - 주요 혜택
-카드ID: 
+출력 예시:
+카드명
+- 추천 이유
+- 주요 혜택
+카드ID:
 """
 
 user_prompt = """\
@@ -242,12 +247,10 @@ def conversation_with_memory(question, user_info):
         "clicked_cards": st.session_state["clicked_cards"],
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
-        "report_flag": "신고" if st.session_state.get("report_flag") else "",  # 추가
+        "report_flag": "신고" if st.session_state.get("report_flag") else "",
     }
 
     append_log_to_sheet(log_entry)
-
-    # 신고 후 다시 False로 초기화
     st.session_state["report_flag"] = False
     return full_response
 
@@ -266,27 +269,23 @@ with col2:
 user_name = st.text_input("닉네임을 입력하세요:", "")
 st.session_state["user_name"] = user_name
 
-
 user_info = {
     "name": user_name or "익명",
     "age_group": age_group,
     "occupation": occupation,
 }
 
-# 이전 대화 및 추천 카드 유지
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
         st.write(msg["content"])
 
-# 이전 추천 카드 표시
 if st.session_state["recommended_cards"]:
     st.subheader("이전 추천 카드 목록")
     for rec in st.session_state["recommended_cards"]:
         st.write(rec["response"])
         show_card_details(rec["card_ids"])
 
-# 입력창
-question = st.chat_input("카드 추천만 가능해요.")
+question = st.chat_input("카드 추천만 가능합니다.")
 if question:
     st.session_state["messages"].append({"role": "user", "content": question})
     with st.chat_message("user"):
