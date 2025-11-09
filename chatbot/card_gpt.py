@@ -138,34 +138,9 @@ def show_card_details(card_ids):
 
         # ------------------- 신고 버튼 처리 -------------------
         if st.button(f"⚠️ 이미지·링크 불일치 신고 ({cid})", key=f"report_{cid}"):
-            try:
-                if f"{cid}_report" not in st.session_state["clicked_cards"]:
-                    st.session_state["clicked_cards"].append(f"{cid}_report")
-
-                # 세션에서 user_info 가져오기
-                user_info = {
-                    "name": st.session_state.get("user_name", "익명"),
-                    "age_group": st.session_state.get("user_age_group", ""),
-                    "occupation": st.session_state.get("user_occupation", ""),
-                }
-
-                # 즉시 로그 기록 (한 줄)
-                log_entry = {
-                    "timestamp": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                    "user_info": user_info,
-                    "query": f"불일치 신고 (카드ID: {cid})",
-                    "response": "",
-                    "card_ids": [str(cid)],
-                    "clicked_cards": st.session_state["clicked_cards"],
-                    "session_duration_sec": 0,
-                    "ab_version": AB_VERSION,
-                    "report_flag": f"카드ID {cid} 신고",
-                }
-
-                append_log_to_sheet(log_entry)
-                st.success(f"카드ID {cid} 신고가 접수되었습니다.")
-            except Exception as e:
-                st.error(f"신고 저장 실패: {e}")
+            st.session_state["clicked_cards"].append(f"{cid}_report")
+            st.session_state["report_flag"] = True  # ✅ 세션에 신고 여부 저장
+            st.success(f"카드ID {cid} 신고가 접수되었습니다. (로그에 반영됩니다)")
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -267,15 +242,13 @@ def conversation_with_memory(question, user_info):
         "clicked_cards": st.session_state["clicked_cards"],
         "session_duration_sec": session_duration,
         "ab_version": AB_VERSION,
-        "report_flag": st.session_state.get("report_flag", ""),
+        "report_flag": "신고" if st.session_state.get("report_flag") else "",  # 추가
     }
 
-    # 세션에 카드 저장 (리렌더링 유지)
-    st.session_state["recommended_cards"].append(
-        {"response": full_response, "card_ids": card_ids}
-    )
-
     append_log_to_sheet(log_entry)
+
+    # 신고 후 다시 False로 초기화
+    st.session_state["report_flag"] = False
     return full_response
 
 
