@@ -4,7 +4,7 @@ import os
 import re
 import random
 import datetime
-from urllib.parse import quote  # 네이버 검색 URL용
+from urllib.parse import quote
 from dotenv import load_dotenv
 from card_rag import search_card
 from langchain_openai import ChatOpenAI
@@ -76,49 +76,70 @@ with open(LINK_IMAGE_PATH, "r", encoding="utf-8") as f:
 LINK_DB = {str(item["card_id"]): item for item in link_data}
 
 
-# ------------------------------- 함수 정의 -------------------------------
+# ------------------------------- 카드 이름 추출 함수 -------------------------------
+def extract_card_name_by_id(text, card_id):
+    """AI 응답 텍스트에서 카드ID 앞의 카드명을 추출"""
+    pattern = rf"([\w가-힣A-Za-z\s]+)\s*카드ID\s*:\s*{card_id}"
+    match = re.search(pattern, text)
+    if match:
+        return match.group(1).strip()
+    return f"카드 {card_id}"
+
+
+# ------------------------------- 카드 정보 표시 함수 -------------------------------
 def extract_card_ids(text):
     return re.findall(r"카드ID\s*:\s*(\d+)", text)
 
 
-# 네이버 검색 URL 생성 함수
 def make_naver_search_url(card_name: str) -> str:
+    """카드 이름으로 네이버 검색 URL 생성"""
     query = quote(card_name + " 카드 신청")
     return f"https://search.naver.com/search.naver?query={query}"
 
 
-def show_card_details(card_ids):
+def show_card_details(card_ids, full_response_text=None):
     """카드ID 기반으로 이미지·링크 표시 + 클릭 추적"""
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
             continue
 
-        card_name = data.get("card_name", f"카드 {cid}")
-        img_path = data.get("image")
+        # 카드 이름 보정
+        card_name = data.get("card_name")
+        if not card_name and full_response_text:
+            card_name = extract_card_name_by_id(full_response_text, cid)
+        if not card_name:
+            card_name = f"카드 {cid}"
 
+        img_path = data.get("image")
         if img_path:
             abs_img_path = os.path.normpath(
                 os.path.join(BASE_DIR, "..", img_path.replace("./", ""))
             )
             if os.path.exists(abs_img_path):
                 st.image(abs_img_path, width=250)
+            else:
+                st.warning(f"이미지 파일을 찾을 수 없습니다: {abs_img_path}")
 
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
-        if not pc_link and not m_link:
-            from urllib.parse import quote
 
-            apply_url = f"https://search.naver.com/search.naver?query={quote(card_name + ' 카드 신청')}"
+        # 링크가 없으면 네이버 검색 URL 생성
+        if not pc_link and not m_link:
+            apply_url = make_naver_search_url(card_name)
         else:
             apply_url = pc_link or m_link
 
         st.markdown(
-            f"[카드 신청 링크 열기 ({cid})]({apply_url})", unsafe_allow_html=True
+            f"[카드 신청 링크 열기 ({card_name})]({apply_url})", unsafe_allow_html=True
         )
+
+        if f"{cid}_link" not in st.session_state["clicked_cards"]:
+            st.session_state["clicked_cards"].append(f"{cid}_link")
+
         st.write("---")
 
-    return ""  # None 대신 빈 문자열을 반환해 0 출력 방지
+    return ""
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -196,38 +217,37 @@ def conversation_with_memory(question, user_info):
 
     for chunk in chain.stream(question):
         full_response += chunk
-        stream_placeholder.write(full_response)
+        stream_placeholder.markdown(full_response)
 
     card_ids = extract_card_ids(full_response)
 
     with image_placeholder.container():
-        show_card_details(card_ids)  # 화면 표시용
+        show_card_details(card_ids, full_response)
 
-    # full_response는 텍스트만 저장, 카드 표시 내용은 show_card_details()가 처리
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
+
     st.session_state["pre_memory"].save_context(
         {"input": question}, {"output": full_response}
     )
 
-    append_log_to_sheet(
-        {
-            "timestamp": datetime.datetime.now().isoformat(),
-            "user_info": user_info,
-            "query": question,
-            "response": full_response,
-            "card_ids": card_ids,
-            "clicked_cards": st.session_state.get("clicked_cards", []),
-            "session_duration_sec": session_duration,
-            "ab_version": AB_VERSION,
-        }
-    )
+    log_entry = {
+        "timestamp": datetime.datetime.now().isoformat(),
+        "user_info": user_info,
+        "query": question,
+        "response": full_response,
+        "card_ids": card_ids,
+        "clicked_cards": st.session_state.get("clicked_cards", []),
+        "session_duration_sec": session_duration,
+        "ab_version": AB_VERSION,
+    }
 
-    # 이미지 표시를 별도로 수행했으므로 여기서는 텍스트만 반환
+    append_log_to_sheet(log_entry)
+
     return full_response
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("AI의 맞춤 카드 추천 챗봇🥰")
+st.title("AI의 맞춤 카드 추천 챗봇")
 
 col1, col2 = st.columns(2)
 with col1:
