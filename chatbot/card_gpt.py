@@ -241,7 +241,7 @@ def conversation_with_memory(question, user_info):
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("AI의 맞춤 카드 추천 챗봇")
+st.title("AI의 맞춤 카드 추천 챗봇🥰")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -270,7 +270,7 @@ for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
         st.markdown(msg["content"], unsafe_allow_html=True)
 
-question = st.chat_input("메시지를 입력하세요.")
+question = st.chat_input("메시지를 입력하세요. AI는 카드 추천만 가능해요.")
 if question:
     st.session_state["messages"].append({"role": "user", "content": question})
     with st.chat_message("user"):
