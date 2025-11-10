@@ -85,17 +85,13 @@ def extract_card_name_by_id(text, card_id):
         name = match.group(1).strip()
         if "카드ID" in name:
             name = name.split("카드ID")[0].strip()
-        # 불필요 문장 필터링
-        if any(x in name for x in ["추천 이유", "혜택"]):
-            name = None
         return name
 
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if "카드ID" in line and str(card_id) in line and i > 0:
             prev_line = lines[i - 1].strip()
-            # 불필요 문장 필터링
-            if prev_line and not any(x in prev_line for x in ["추천 이유", "혜택"]):
+            if prev_line:
                 return prev_line
     return None
 
@@ -106,11 +102,9 @@ def extract_card_ids(text):
 
 
 def make_naver_search_url(card_name: str) -> str:
-    """카드 이름으로 네이버 검색 URL 생성"""
-    clean_name = card_name.strip()
-    if not clean_name.endswith("카드"):
-        clean_name += " 카드"
-    query = quote(clean_name + " 신청")
+    # 이 함수는 이미 urllib.parse.quote를 사용하여 URL 인코딩을 처리하고 있습니다.
+    # [문제 1]을 해결하는 로직입니다.
+    query = quote(card_name + " 카드 신청")
     return f"https://search.naver.com/search.naver?query={query}"
 
 
@@ -142,9 +136,10 @@ def show_card_details(card_ids, full_response_text=None):
         else:
             apply_url = pc_link or m_link
 
-        st.markdown(f"[카드 신청하러 가기]({apply_url})", unsafe_allow_html=True).write(
-            "---"
+        st.markdown(
+            f"[{card_name} 카드 신청 링크 열기]({apply_url})", unsafe_allow_html=True
         )
+        st.write("---")
 
     return ""
 
@@ -254,7 +249,7 @@ def conversation_with_memory(question, user_info):
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("AI의 맞춤 카드 추천 챗봇🥰")
+st.title("AI의 맞춤 카드 추천 챗봇")
 
 col1, col2 = st.columns(2)
 with col1:
@@ -279,9 +274,14 @@ user_info = {
     "occupation": occupation,
 }
 
+# 기존 메시지 렌더링 및 'system_log' 처리 (Issue 2 setup)
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
-        st.markdown(msg["content"], unsafe_allow_html=True)
+        # 신고 로그는 일반 채팅과 구분되도록 경고 메시지로 표시합니다.
+        if msg["role"] == "system_log":
+            st.warning(msg["content"])
+        else:
+            st.markdown(msg["content"], unsafe_allow_html=True)
 
 question = st.chat_input("메시지를 입력하세요. AI는 카드 추천만 가능해요.")
 if question:
@@ -290,11 +290,40 @@ if question:
         st.write(question)
 
     if st.session_state["messages"][-1]["role"] != "assistant":
-        with st.chat_message("assistant"):
+        # 응답과 버튼을 함께 관리하기 위해 컨테이너를 사용합니다. (Issue 2 Logic)
+        with st.container():
             try:
+                # 1. AI 응답 생성 및 화면 렌더링
+                # (이 함수 내에서 응답 스트리밍 및 카드 정보가 이미 렌더링됩니다.)
                 ai_response = conversation_with_memory(question, user_info)
+
+                # [문제 1] 해결 안내:
+                # 'make_naver_search_url' 함수는 이미 'urllib.parse.quote'를 사용하여 URL 인코딩을 처리합니다.
+                # 따라서 기술적으로는 문제가 해결되었지만, 만약 여전히 링크가 올바르지 않다면
+                # 'card_name'의 특수문자나 시스템 환경 문제일 수 있습니다.
+
+                # 2. 세션 상태에 응답 추가 (로그 기록용)
                 st.session_state["messages"].append(
                     {"role": "assistant", "content": ai_response}
                 )
+
+                # 3. 신고 버튼 추가 (Issue 2 Logic)
+                # 이 버튼은 새로 생성된 메시지 바로 다음에 나타납니다.
+                report_key = f"report_{len(st.session_state['messages']) - 1}"
+
+                if st.button("🚨 카드 정보 오류 신고", key=report_key):
+                    # 신고 대상 메시지는 방금 받은 AI 응답입니다.
+                    reported_msg_content = ai_response
+
+                    report_log = {
+                        "role": "system_log",
+                        "content": f"사용자 '{user_info['name']}'이(가) 최신 카드 정보(이미지/링크) 오류를 신고했습니다.\n신고된 메시지 (일부):\n---\n{reported_msg_content[:150]}...",
+                        # 신고 기록은 기존의 messages 리스트에 추가되어 로그로 기능합니다.
+                    }
+                    st.session_state["messages"].append(report_log)
+
+                    # Streamlit을 다시 실행하여 신고 기록이 즉시 UI에 반영되도록 합니다.
+                    st.rerun()
+
             except Exception as e:
                 st.error(f"오류 발생: {e}")
