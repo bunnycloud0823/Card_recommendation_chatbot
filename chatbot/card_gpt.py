@@ -77,6 +77,7 @@ LINK_DB = {str(item["card_id"]): item for item in link_data}
 
 
 # ------------------------------- 카드 이름 추출 -------------------------------
+# ------------------------------- 카드 이름 추출 -------------------------------
 def extract_card_name_by_id(text, card_id):
     """AI 응답에서 카드ID 앞의 줄 또는 문장을 추출"""
     pattern = rf"([\w가-힣A-Za-z\s]+)\s*\n?\s*카드ID\s*:\s*{card_id}"
@@ -85,13 +86,17 @@ def extract_card_name_by_id(text, card_id):
         name = match.group(1).strip()
         if "카드ID" in name:
             name = name.split("카드ID")[0].strip()
+        # 불필요 문장 필터링
+        if any(x in name for x in ["추천 이유", "혜택"]):
+            name = None
         return name
 
     lines = text.splitlines()
     for i, line in enumerate(lines):
         if "카드ID" in line and str(card_id) in line and i > 0:
             prev_line = lines[i - 1].strip()
-            if prev_line:
+            # 불필요 문장 필터링
+            if prev_line and not any(x in prev_line for x in ["추천 이유", "혜택"]):
                 return prev_line
     return None
 
