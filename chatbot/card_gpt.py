@@ -79,8 +79,9 @@ LINK_DB = {str(item["card_id"]): item for item in link_data}
 # ------------------------------- 카드 이름 추출 함수 -------------------------------
 def extract_card_name_by_id(text, card_id):
     """AI 응답 텍스트에서 카드ID 앞의 카드명을 추출"""
-    pattern = rf"([\w가-힣A-Za-z\s]+)\s*카드ID\s*:\s*{card_id}
-    import streamlit as st
+    pattern = rf"([\w가-힣A-Za-z\s]+)\s*카드ID\s*:\s*{card_id}"
+    
+import streamlit as st
 import json
 import os
 import re
