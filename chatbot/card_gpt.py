@@ -286,7 +286,6 @@ if question:
         with st.chat_message("assistant"):
             try:
                 ai_response = conversation_with_memory(question, user_info)
-                st.markdown(ai_response, unsafe_allow_html=True)
                 st.session_state["messages"].append(
                     {"role": "assistant", "content": ai_response}
                 )
