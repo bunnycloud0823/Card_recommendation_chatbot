@@ -88,9 +88,7 @@ def make_naver_search_url(card_name: str) -> str:
 
 
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + Markdown 저장"""
-    md_blocks = []
-
+    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적"""
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -105,33 +103,22 @@ def show_card_details(card_ids):
             )
             if os.path.exists(abs_img_path):
                 st.image(abs_img_path, width=250)
-            else:
-                st.warning(f"이미지 파일을 찾을 수 없습니다: {abs_img_path}")
 
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
-
-        # 링크가 없으면 네이버 검색 URL 자동 생성
         if not pc_link and not m_link:
-            apply_url = make_naver_search_url(card_name)
+            from urllib.parse import quote
+
+            apply_url = f"https://search.naver.com/search.naver?query={quote(card_name + ' 카드 신청')}"
         else:
             apply_url = pc_link or m_link
 
         st.markdown(
             f"[카드 신청 링크 열기 ({cid})]({apply_url})", unsafe_allow_html=True
         )
-
-        if f"{cid}_link" not in st.session_state["clicked_cards"]:
-            st.session_state["clicked_cards"].append(f"{cid}_link")
-
-        # Markdown 형태로 저장 (세션 복원용)
-        img_md = f"![{card_name}]({img_path})" if img_path else "(이미지 없음)"
-        md_block = f"**{card_name}**\n\n{img_md}\n\n[카드 신청 링크 열기]({apply_url})"
-        md_blocks.append(md_block)
-
         st.write("---")
 
-    return "\n\n---\n\n".join(md_blocks)
+    return ""  # None 대신 빈 문자열을 반환해 0 출력 방지
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -213,31 +200,30 @@ def conversation_with_memory(question, user_info):
 
     card_ids = extract_card_ids(full_response)
 
-    # 카드 이미지+링크 Markdown 생성
     with image_placeholder.container():
-        card_md = show_card_details(card_ids)
+        show_card_details(card_ids)  # 화면 표시용
 
+    # full_response는 텍스트만 저장, 카드 표시 내용은 show_card_details()가 처리
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
-
     st.session_state["pre_memory"].save_context(
         {"input": question}, {"output": full_response}
     )
 
-    log_entry = {
-        "timestamp": datetime.datetime.now().isoformat(),
-        "user_info": user_info,
-        "query": question,
-        "response": full_response,
-        "card_ids": card_ids,
-        "clicked_cards": st.session_state.get("clicked_cards", []),
-        "session_duration_sec": session_duration,
-        "ab_version": AB_VERSION,
-    }
+    append_log_to_sheet(
+        {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "user_info": user_info,
+            "query": question,
+            "response": full_response,
+            "card_ids": card_ids,
+            "clicked_cards": st.session_state.get("clicked_cards", []),
+            "session_duration_sec": session_duration,
+            "ab_version": AB_VERSION,
+        }
+    )
 
-    append_log_to_sheet(log_entry)
-
-    # 이미지·링크 포함한 전체 답변 반환
-    return full_response + "\n\n" + card_md
+    # 이미지 표시를 별도로 수행했으므로 여기서는 텍스트만 반환
+    return full_response
 
 
 # ------------------------------- 메인 화면 -------------------------------
