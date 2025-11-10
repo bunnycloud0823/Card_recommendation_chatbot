@@ -4,6 +4,7 @@ import os
 import re
 import random
 import datetime
+from urllib.parse import quote  # 네이버 검색 URL용
 from dotenv import load_dotenv
 from card_rag import search_card
 from langchain_openai import ChatOpenAI
@@ -17,11 +18,8 @@ from google.oauth2.service_account import Credentials
 
 # ------------------------------- 초기 설정 -------------------------------
 load_dotenv()
-
-# Streamlit Secrets에서 환경 변수 불러오기
 SHEET_ID = st.secrets["SHEET_ID"]
 
-# Google Service Account JSON 파싱
 raw_json = st.secrets["GOOGLE_SERVICE_ACCOUNT"]
 try:
     parsed = json.loads(raw_json)
@@ -30,10 +28,9 @@ try:
     else:
         service_account_info = parsed
 except json.JSONDecodeError as e:
-    st.error(f"❌ JSON 파싱 오류: {e}")
+    st.error(f"JSON 파싱 오류: {e}")
     st.stop()
 
-# Google 인증 객체 생성
 creds = Credentials.from_service_account_info(
     service_account_info,
     scopes=[
@@ -47,7 +44,6 @@ sheet = gc.open_by_key(SHEET_ID).sheet1
 
 # ------------------------------- 로그 저장 함수 -------------------------------
 def append_log_to_sheet(log_entry):
-    """Google Sheets에 로그 추가"""
     try:
         row = [
             log_entry.get("timestamp"),
@@ -82,19 +78,27 @@ LINK_DB = {str(item["card_id"]): item for item in link_data}
 
 # ------------------------------- 함수 정의 -------------------------------
 def extract_card_ids(text):
-    """AI 응답에서 카드ID 추출"""
     return re.findall(r"카드ID\s*:\s*(\d+)", text)
 
 
+# 네이버 검색 URL 생성 함수
+def make_naver_search_url(card_name: str) -> str:
+    query = quote(card_name + " 카드 신청")
+    return f"https://search.naver.com/search.naver?query={query}"
+
+
 def show_card_details(card_ids):
-    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 기능"""
+    """카드ID 기반으로 이미지·링크 표시 + 클릭 추적 + Markdown 저장"""
+    md_blocks = []
 
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
             continue
 
+        card_name = data.get("card_name", f"카드 {cid}")
         img_path = data.get("image")
+
         if img_path:
             abs_img_path = os.path.normpath(
                 os.path.join(BASE_DIR, "..", img_path.replace("./", ""))
@@ -107,26 +111,27 @@ def show_card_details(card_ids):
         pc_link = data.get("request_pc")
         m_link = data.get("request_m")
 
-        if pc_link:
-            st.markdown(
-                f"[PC 신청 링크 열기 ({cid})]({pc_link})",
-                unsafe_allow_html=True,
-            )
-            if f"{cid}_pc" not in st.session_state["clicked_cards"]:
-                st.session_state["clicked_cards"].append(f"{cid}_pc")
-
-        if m_link:
-            st.markdown(
-                f"[모바일 신청 링크 열기 ({cid})]({m_link})",
-                unsafe_allow_html=True,
-            )
-            if f"{cid}_m" not in st.session_state["clicked_cards"]:
-                st.session_state["clicked_cards"].append(f"{cid}_m")
-
+        # 링크가 없으면 네이버 검색 URL 자동 생성
         if not pc_link and not m_link:
-            st.write("신청 링크 없음")
+            apply_url = make_naver_search_url(card_name)
+        else:
+            apply_url = pc_link or m_link
+
+        st.markdown(
+            f"[카드 신청 링크 열기 ({cid})]({apply_url})", unsafe_allow_html=True
+        )
+
+        if f"{cid}_link" not in st.session_state["clicked_cards"]:
+            st.session_state["clicked_cards"].append(f"{cid}_link")
+
+        # Markdown 형태로 저장 (세션 복원용)
+        img_md = f"![{card_name}]({img_path})" if img_path else "(이미지 없음)"
+        md_block = f"**{card_name}**\n\n{img_md}\n\n[카드 신청 링크 열기]({apply_url})"
+        md_blocks.append(md_block)
 
         st.write("---")
+
+    return "\n\n---\n\n".join(md_blocks)
 
 
 # ------------------------------- 세션 초기화 -------------------------------
@@ -208,8 +213,9 @@ def conversation_with_memory(question, user_info):
 
     card_ids = extract_card_ids(full_response)
 
+    # 카드 이미지+링크 Markdown 생성
     with image_placeholder.container():
-        show_card_details(card_ids)
+        card_md = show_card_details(card_ids)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -230,7 +236,8 @@ def conversation_with_memory(question, user_info):
 
     append_log_to_sheet(log_entry)
 
-    return full_response
+    # 이미지·링크 포함한 전체 답변 반환
+    return full_response + "\n\n" + card_md
 
 
 # ------------------------------- 메인 화면 -------------------------------
@@ -261,7 +268,7 @@ user_info = {
 
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
-        st.write(msg["content"])
+        st.markdown(msg["content"], unsafe_allow_html=True)
 
 question = st.chat_input("메시지를 입력하세요.")
 if question:
@@ -273,6 +280,7 @@ if question:
         with st.chat_message("assistant"):
             try:
                 ai_response = conversation_with_memory(question, user_info)
+                st.markdown(ai_response, unsafe_allow_html=True)
                 st.session_state["messages"].append(
                     {"role": "assistant", "content": ai_response}
                 )
