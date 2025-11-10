@@ -172,7 +172,7 @@ def extract_card_name_by_id(text, card_id):
     # 패턴 실패 시 카드ID가 포함된 줄의 바로 위 줄에서 카드명 추정
     lines = text.splitlines()
     for i, line in enumerate(lines):
-        if f"카드ID" in line and str(card_id) in line and i > 0:
+        if "카드ID" in line and str(card_id) in line and i > 0:
             prev_line = lines[i - 1].strip()
             if prev_line:
                 return prev_line
