@@ -77,7 +77,6 @@ LINK_DB = {str(item["card_id"]): item for item in link_data}
 
 
 # ------------------------------- 카드 이름 추출 -------------------------------
-# ------------------------------- 카드 이름 추출 -------------------------------
 def extract_card_name_by_id(text, card_id):
     """AI 응답에서 카드ID 앞의 줄 또는 문장을 추출"""
     pattern = rf"([\w가-힣A-Za-z\s]+)\s*\n?\s*카드ID\s*:\s*{card_id}"
@@ -107,7 +106,11 @@ def extract_card_ids(text):
 
 
 def make_naver_search_url(card_name: str) -> str:
-    query = quote(card_name + " 카드 신청")
+    """카드 이름으로 네이버 검색 URL 생성"""
+    clean_name = card_name.strip()
+    if not clean_name.endswith("카드"):
+        clean_name += " 카드"
+    query = quote(clean_name + " 신청")
     return f"https://search.naver.com/search.naver?query={query}"
 
 
@@ -139,10 +142,9 @@ def show_card_details(card_ids, full_response_text=None):
         else:
             apply_url = pc_link or m_link
 
-        st.markdown(
-            f"[{card_name} 카드 신청 링크 열기]({apply_url})", unsafe_allow_html=True
+        st.markdown(f"[카드 신청하러 가기]({apply_url})", unsafe_allow_html=True).write(
+            "---"
         )
-        st.write("---")
 
     return ""
 
@@ -252,7 +254,7 @@ def conversation_with_memory(question, user_info):
 
 
 # ------------------------------- 메인 화면 -------------------------------
-st.title("AI의 맞춤 카드 추천 챗봇")
+st.title("AI의 맞춤 카드 추천 챗봇🥰")
 
 col1, col2 = st.columns(2)
 with col1:
