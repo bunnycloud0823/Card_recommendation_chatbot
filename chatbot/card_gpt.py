@@ -97,18 +97,18 @@ def extract_card_name_by_id(text, card_id):
 
 
 # ------------------------------- 카드 표시 -------------------------------
+# user_info를 인수로 추가하여 카드별 신고 로직을 구현합니다.
 def extract_card_ids(text):
     return re.findall(r"카드ID\s*:\s*(\d+)", text)
 
 
 def make_naver_search_url(card_name: str) -> str:
     # 이 함수는 이미 urllib.parse.quote를 사용하여 URL 인코딩을 처리하고 있습니다.
-    # [문제 1]을 해결하는 로직입니다.
     query = quote(card_name + " 카드 신청")
     return f"https://search.naver.com/search.naver?query={query}"
 
 
-def show_card_details(card_ids, full_response_text=None):
+def show_card_details(card_ids, full_response_text=None, user_info=None):
     for cid in card_ids:
         data = LINK_DB.get(str(cid))
         if not data:
@@ -117,29 +117,58 @@ def show_card_details(card_ids, full_response_text=None):
         card_name = data.get("card_name")
         if not card_name and full_response_text:
             card_name = extract_card_name_by_id(full_response_text, cid)
+
+        # [문제 1 해결] 카드 이름이 없을 경우 카드 ID만 표시되는 문제를 해결
         if not card_name:
-            card_name = f"카드ID {cid}"
+            # 기본적으로 ID만 남지 않도록 조금 더 명확한 문구를 사용
+            card_name = f"카드 ({cid})"
 
-        img_path = data.get("image")
-        if img_path:
-            abs_img_path = os.path.normpath(
-                os.path.join(BASE_DIR, "..", img_path.replace("./", ""))
+        # 카드별 UI 컨테이너 및 신고 버튼 추가 (문제 2 및 3 해결)
+        with st.container(border=True):
+            st.markdown(f"**추천 카드: {card_name}**", unsafe_allow_html=True)
+
+            img_path = data.get("image")
+            if img_path:
+                abs_img_path = os.path.normpath(
+                    os.path.join(BASE_DIR, "..", img_path.replace("./", ""))
+                )
+                if os.path.exists(abs_img_path):
+                    st.image(abs_img_path, width=250)
+
+            pc_link = data.get("request_pc")
+            m_link = data.get("request_m")
+
+            if not pc_link and not m_link:
+                apply_url = make_naver_search_url(card_name)
+            else:
+                apply_url = pc_link or m_link
+
+            # 카드 신청 링크 표시
+            st.markdown(
+                f"[{card_name} 카드 신청 링크 열기]({apply_url})",
+                unsafe_allow_html=True,
             )
-            if os.path.exists(abs_img_path):
-                st.image(abs_img_path, width=250)
 
-        pc_link = data.get("request_pc")
-        m_link = data.get("request_m")
+            # [문제 2 및 3 해결] 카드별 오류 신고 버튼 및 로그 기록
+            if user_info:
+                # 고유 키 생성 (CID와 타임스탬프 결합)
+                report_card_key = (
+                    f"report_card_{cid}_{datetime.datetime.now().timestamp()}"
+                )
 
-        if not pc_link and not m_link:
-            apply_url = make_naver_search_url(card_name)
-        else:
-            apply_url = pc_link or m_link
+                if st.button(f"🚨 '{card_name}' 정보 오류 신고", key=report_card_key):
+                    report_log = {
+                        "role": "system_log",
+                        "content": (
+                            f"사용자 '{user_info.get('name', '익명')}'이(가) 카드 ID {cid} ('{card_name}')의 정보 오류를 신고했습니다.\n"
+                            f"신고 유형: 이미지/링크 오류. 신고된 카드 링크: {apply_url}"
+                        ),
+                    }
+                    # 세션 메시지에 추가하여 로그 기록
+                    st.session_state["messages"].append(report_log)
+                    st.rerun()  # 로그가 즉시 반영되도록 Streamlit 다시 실행
 
-        st.markdown(
-            f"[{card_name} 카드 신청 링크 열기]({apply_url})", unsafe_allow_html=True
-        )
-        st.write("---")
+        st.write("---")  # 카드 블록 구분선
 
     return ""
 
@@ -224,7 +253,8 @@ def conversation_with_memory(question, user_info):
     card_ids = extract_card_ids(full_response)
 
     with image_placeholder.container():
-        show_card_details(card_ids, full_response)
+        # user_info를 show_card_details에 전달하여 신고 기능을 활성화
+        show_card_details(card_ids, full_response, user_info)
 
     session_duration = (datetime.datetime.now() - SESSION_START).total_seconds()
 
@@ -274,7 +304,7 @@ user_info = {
     "occupation": occupation,
 }
 
-# 기존 메시지 렌더링 및 'system_log' 처리 (Issue 2 setup)
+# 기존 메시지 렌더링 및 'system_log' 처리
 for msg in st.session_state["messages"]:
     with st.chat_message(msg["role"]):
         # 신고 로그는 일반 채팅과 구분되도록 경고 메시지로 표시합니다.
@@ -290,40 +320,19 @@ if question:
         st.write(question)
 
     if st.session_state["messages"][-1]["role"] != "assistant":
-        # 응답과 버튼을 함께 관리하기 위해 컨테이너를 사용합니다. (Issue 2 Logic)
+        # 응답과 버튼을 함께 관리하기 위해 컨테이너를 사용합니다.
         with st.container():
             try:
                 # 1. AI 응답 생성 및 화면 렌더링
-                # (이 함수 내에서 응답 스트리밍 및 카드 정보가 이미 렌더링됩니다.)
+                # (ai_response와 show_card_details(카드별 버튼 포함)가 conversation_with_memory 내에서 모두 렌더링됩니다.)
                 ai_response = conversation_with_memory(question, user_info)
-
-                # [문제 1] 해결 안내:
-                # 'make_naver_search_url' 함수는 이미 'urllib.parse.quote'를 사용하여 URL 인코딩을 처리합니다.
-                # 따라서 기술적으로는 문제가 해결되었지만, 만약 여전히 링크가 올바르지 않다면
-                # 'card_name'의 특수문자나 시스템 환경 문제일 수 있습니다.
 
                 # 2. 세션 상태에 응답 추가 (로그 기록용)
                 st.session_state["messages"].append(
                     {"role": "assistant", "content": ai_response}
                 )
 
-                # 3. 신고 버튼 추가 (Issue 2 Logic)
-                # 이 버튼은 새로 생성된 메시지 바로 다음에 나타납니다.
-                report_key = f"report_{len(st.session_state['messages']) - 1}"
-
-                if st.button("🚨 카드 정보 오류 신고", key=report_key):
-                    # 신고 대상 메시지는 방금 받은 AI 응답입니다.
-                    reported_msg_content = ai_response
-
-                    report_log = {
-                        "role": "system_log",
-                        "content": f"사용자 '{user_info['name']}'이(가) 최신 카드 정보(이미지/링크) 오류를 신고했습니다.\n신고된 메시지 (일부):\n---\n{reported_msg_content[:150]}...",
-                        # 신고 기록은 기존의 messages 리스트에 추가되어 로그로 기능합니다.
-                    }
-                    st.session_state["messages"].append(report_log)
-
-                    # Streamlit을 다시 실행하여 신고 기록이 즉시 UI에 반영되도록 합니다.
-                    st.rerun()
+                # [이전 신고 버튼 제거]: 카드별 신고 버튼은 show_card_details 내부에서 처리됩니다.
 
             except Exception as e:
                 st.error(f"오류 발생: {e}")
